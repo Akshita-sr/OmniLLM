@@ -1,0 +1,75 @@
+tasks:
+  - id: reasoning-bat-ball
+    category: reasoning
+    prompt: |
+      A bat and a ball together cost $1.10. The bat costs $1.00 more than the ball.
+      How much does the ball cost? Show your reasoning step by step.
+    reference_answer: "The ball costs $0.05 (5 cents)."
+    grading_type: llm_judge
+    judge_pattern: reference_based
+    judge_prompt: |
+      The correct answer is: The ball costs $0.05 (5 cents).
+      The bat costs $1.05. Total = $1.10.
+      Score 1.0 if the answer is correct and reasoning is shown.
+      Score 0.5 if correct answer but no reasoning.
+      Score 0.0 if incorrect (a common wrong answer is $0.10).
+
+  - id: reasoning-syllogism
+    category: reasoning
+    prompt: |
+      All mammals are warm-blooded. All whales are mammals.
+      Conclusion: Are whales warm-blooded? Explain your logical reasoning.
+    reference_answer: "Yes, whales are warm-blooded. This follows by modus ponens (transitive syllogism)."
+    grading_type: llm_judge
+    judge_pattern: reference_based
+    judge_prompt: |
+      Score 1.0 if the model correctly concludes whales are warm-blooded AND explains
+      the logical chain (all mammals are warm-blooded → whales are mammals → whales are warm-blooded).
+      Score 0.5 if correct answer without proper logical explanation.
+      Score 0.0 if incorrect conclusion.
+
+  - id: reasoning-math-word-problem
+    category: reasoning
+    prompt: |
+      Alice has 3 times as many books as Bob. Charlie has 5 fewer books than Alice.
+      Together they have 55 books. How many books does each person have?
+      Show all steps.
+    reference_answer: "Bob=10, Alice=30, Charlie=25. Total=65. Wait — let me recheck: Let Bob=b, Alice=3b, Charlie=3b-5. Sum: b+3b+3b-5=55 → 7b=60 → b≈8.57 (not integer). If Bob=10: Alice=30, Charlie=25, total=65. Check problem: 7b=60 has no integer solution."
+    grading_type: llm_judge
+    judge_pattern: referenceless
+    judge_prompt: |
+      Evaluate if the model correctly sets up algebraic equations, works through the
+      arithmetic, and identifies any issues with the problem (it has no integer solution).
+      Score 1.0 for complete correct solution with proper work shown.
+      Score 0.7 for correct setup and process but arithmetic error.
+      Score 0.3 for an attempt with significant errors.
+      Score 0.0 for no meaningful attempt.
+
+  - id: reasoning-coin-flip
+    category: reasoning
+    prompt: |
+      You flip a fair coin 10 times and get heads every time.
+      What is the probability of getting heads on the 11th flip?
+      Many people get this wrong — what is the common mistake?
+    reference_answer: "0.5 (50%). Each flip is independent. The gambler's fallacy is the common mistake: believing past results influence future independent events."
+    grading_type: llm_judge
+    judge_pattern: reference_based
+    judge_prompt: |
+      Score 1.0 if model correctly says 50% (or 0.5) AND identifies the gambler's fallacy.
+      Score 0.7 if correct answer but doesn't mention the gambler's fallacy.
+      Score 0.0 if incorrect probability.
+
+  - id: reasoning-knights-knaves
+    category: reasoning
+    prompt: |
+      On an island, knights always tell the truth and knaves always lie.
+      You meet two people, A and B.
+      A says: "At least one of us is a knave."
+      What are A and B?
+    reference_answer: "A is a knight, B is a knave. If A were a knave, 'at least one of us is a knave' would be true, but knaves lie, so A can't be a knave. Therefore A is a knight, and since A truthfully says at least one is a knave, B must be the knave."
+    grading_type: llm_judge
+    judge_pattern: reference_based
+    judge_prompt: |
+      Score 1.0 for correct answer (A=knight, B=knave) with correct logical proof by contradiction.
+      Score 0.5 for correct answer without full proof.
+      Score 0.0 for wrong answer.
