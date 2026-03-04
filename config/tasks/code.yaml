@@ -1,0 +1,126 @@
+tasks:
+  - id: code-prime-checker
+    category: code
+    prompt: |
+      Write a Python function `is_prime(n: int) -> bool` that returns True if n is prime,
+      False otherwise. Handle edge cases (n <= 1, n = 2). Include a brief docstring.
+    reference_answer: |
+      def is_prime(n: int) -> bool:
+          """Return True if n is a prime number, False otherwise."""
+          if n <= 1:
+              return False
+          if n == 2:
+              return True
+          if n % 2 == 0:
+              return False
+          for i in range(3, int(n**0.5) + 1, 2):
+              if n % i == 0:
+                  return False
+          return True
+    grading_type: llm_judge
+    judge_pattern: reference_based
+    judge_prompt: |
+      Score 1.0 for correct, efficient implementation with:
+        - Handles n<=1 (returns False)
+        - Handles n=2 (returns True)
+        - Handles even numbers > 2
+        - Checks up to sqrt(n) for factors
+        - Has docstring
+      Score 0.8 for correct but O(n) instead of O(sqrt(n)).
+      Score 0.5 for mostly correct but missing edge cases.
+      Score 0.0 for incorrect logic.
+
+  - id: code-fizzbuzz
+    category: code
+    prompt: |
+      Write a Python function `fizzbuzz(n: int) -> list[str]` that returns a list of
+      strings for numbers 1 through n where:
+      - Multiples of 3 → "Fizz"
+      - Multiples of 5 → "Buzz"
+      - Multiples of both → "FizzBuzz"
+      - Otherwise → the number as a string
+    reference_answer: |
+      def fizzbuzz(n: int) -> list[str]:
+          result = []
+          for i in range(1, n + 1):
+              if i % 15 == 0:
+                  result.append("FizzBuzz")
+              elif i % 3 == 0:
+                  result.append("Fizz")
+              elif i % 5 == 0:
+                  result.append("Buzz")
+              else:
+                  result.append(str(i))
+          return result
+    grading_type: llm_judge
+    judge_pattern: reference_based
+    judge_prompt: |
+      Score 1.0 for correct implementation with all four cases handled correctly.
+      Score 0.7 for mostly correct but checks 3 and 5 separately before checking 15
+        (wrong order — would never hit FizzBuzz).
+      Score 0.5 for correct logic but incorrect return type.
+      Score 0.0 for incorrect.
+
+  - id: code-debug-binary-search
+    category: code
+    prompt: |
+      The following Python function has a bug. Find and fix it:
+
+      ```python
+      def binary_search(arr, target):
+          left, right = 0, len(arr)
+          while left < right:
+              mid = (left + right) // 2
+              if arr[mid] == target:
+                  return mid
+              elif arr[mid] < target:
+                  left = mid
+              else:
+                  right = mid
+          return -1
+      ```
+    reference_answer: |
+      Two bugs:
+      1. `right = len(arr)` should be `right = len(arr) - 1`
+      2. `left = mid` should be `left = mid + 1` (causes infinite loop when left+1==right)
+      3. Loop should be `while left <= right`
+
+      Fixed:
+      def binary_search(arr, target):
+          left, right = 0, len(arr) - 1
+          while left <= right:
+              mid = (left + right) // 2
+              if arr[mid] == target:
+                  return mid
+              elif arr[mid] < target:
+                  left = mid + 1
+              else:
+                  right = mid - 1
+          return -1
+    grading_type: llm_judge
+    judge_pattern: reference_based
+    judge_prompt: |
+      Score 1.0 for identifying all bugs and providing a correct fix.
+      Score 0.7 for fixing the infinite loop bug (left = mid + 1) even if missing right = len-1.
+      Score 0.4 for identifying the problem without a complete fix.
+      Score 0.0 for no useful diagnosis.
+
+  - id: code-list-comprehension
+    category: code
+    prompt: |
+      Rewrite the following Python code using list comprehension and make it more Pythonic:
+
+      ```python
+      result = []
+      for x in range(1, 101):
+          if x % 2 == 0:
+              result.append(x * x)
+      ```
+    reference_answer: "result = [x * x for x in range(1, 101) if x % 2 == 0]"
+    grading_type: llm_judge
+    judge_pattern: reference_based
+    judge_prompt: |
+      Score 1.0 for correct single-line list comprehension equivalent.
+      Score 0.7 for correct but verbose (e.g., uses filter/map instead of comprehension).
+      Score 0.3 for partially correct.
+      Score 0.0 for incorrect output.

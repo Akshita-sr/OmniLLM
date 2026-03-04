@@ -1,0 +1,166 @@
+models:
+  # ─── Cloud Models ──────────────────────────────────────────────────────────
+
+  openai-gpt4o:
+    id: openai-gpt4o
+    provider: openai
+    model: gpt-4o
+    api_key_env: OPENAI_API_KEY
+    cost_per_1m_input: 5.00
+    cost_per_1m_output: 15.00
+    type: cloud
+    description: "OpenAI GPT-4o — multimodal flagship model"
+
+  openai-o1:
+    id: openai-o1
+    provider: openai
+    model: o1
+    api_key_env: OPENAI_API_KEY
+    cost_per_1m_input: 15.00
+    cost_per_1m_output: 60.00
+    type: cloud
+    description: "OpenAI o1 — advanced reasoning model"
+
+  claude-3.5-sonnet:
+    id: claude-3.5-sonnet
+    provider: anthropic
+    model: claude-3-5-sonnet-20241022
+    api_key_env: ANTHROPIC_API_KEY
+    cost_per_1m_input: 3.00
+    cost_per_1m_output: 15.00
+    type: cloud
+    description: "Anthropic Claude 3.5 Sonnet — best of Claude family"
+
+  claude-3-opus:
+    id: claude-3-opus
+    provider: anthropic
+    model: claude-3-opus-20240229
+    api_key_env: ANTHROPIC_API_KEY
+    cost_per_1m_input: 15.00
+    cost_per_1m_output: 75.00
+    type: cloud
+    description: "Anthropic Claude 3 Opus — most powerful Claude"
+
+  gemini-2-pro:
+    id: gemini-2-pro
+    provider: google
+    model: gemini-2.0-pro
+    api_key_env: GOOGLE_API_KEY
+    cost_per_1m_input: 3.50
+    cost_per_1m_output: 10.50
+    type: cloud
+    description: "Google Gemini 2.0 Pro — latest generation"
+
+  gemini-1.5-flash:
+    id: gemini-1.5-flash
+    provider: google
+    model: gemini-1.5-flash
+    api_key_env: GOOGLE_API_KEY
+    cost_per_1m_input: 0.075
+    cost_per_1m_output: 0.30
+    type: cloud
+    description: "Google Gemini 1.5 Flash — fast and affordable"
+
+  google-studio-pro:
+    id: google-studio-pro
+    provider: google
+    model: gemini-1.5-pro
+    api_key_env: GOOGLE_STUDIO_KEY
+    cost_per_1m_input: 3.50
+    cost_per_1m_output: 10.50
+    type: cloud
+    description: "Google AI Studio — Gemini 1.5 Pro via AI Studio"
+
+  deepseek-v3-cloud:
+    id: deepseek-v3-cloud
+    provider: deepseek
+    model: deepseek-chat
+    api_key_env: DEEPSEEK_API_KEY
+    api_base: https://api.deepseek.com
+    cost_per_1m_input: 0.27
+    cost_per_1m_output: 1.10
+    type: cloud
+    description: "DeepSeek V3 — cloud API"
+
+  deepseek-r1-cloud:
+    id: deepseek-r1-cloud
+    provider: deepseek
+    model: deepseek-reasoner
+    api_key_env: DEEPSEEK_API_KEY
+    api_base: https://api.deepseek.com
+    cost_per_1m_input: 0.55
+    cost_per_1m_output: 2.19
+    type: cloud
+    description: "DeepSeek R1 — cloud reasoning model"
+
+  qwen-2.5-72b:
+    id: qwen-2.5-72b
+    provider: openai_compatible
+    model: qwen-2.5-72b-instruct
+    api_key_env: QWEN_API_KEY
+    api_base: https://dashscope.aliyuncs.com/compatible-mode/v1
+    cost_per_1m_input: 1.10
+    cost_per_1m_output: 3.40
+    type: cloud
+    description: "Alibaba Qwen 2.5 72B — via DashScope"
+
+  # ─── Local Models (Ollama) ─────────────────────────────────────────────────
+
+  deepseek-r1-local:
+    id: deepseek-r1-local
+    provider: ollama
+    model: deepseek-r1:14b
+    api_base: http://localhost:11434
+    cost_per_1m_input: 0.00
+    cost_per_1m_output: 0.00
+    type: local
+    description: "DeepSeek R1 14B — local via Ollama"
+
+  qwen-2.5-local:
+    id: qwen-2.5-local
+    provider: ollama
+    model: qwen2.5:7b
+    api_base: http://localhost:11434
+    cost_per_1m_input: 0.00
+    cost_per_1m_output: 0.00
+    type: local
+    description: "Qwen 2.5 7B — local via Ollama"
+
+  llama3-local:
+    id: llama3-local
+    provider: ollama
+    model: llama3:8b
+    api_base: http://localhost:11434
+    cost_per_1m_input: 0.00
+    cost_per_1m_output: 0.00
+    type: local
+    description: "Meta Llama 3 8B — local via Ollama"
+
+  mistral-local:
+    id: mistral-local
+    provider: ollama
+    model: mistral:7b
+    api_base: http://localhost:11434
+    cost_per_1m_input: 0.00
+    cost_per_1m_output: 0.00
+    type: local
+    description: "Mistral 7B — local via Ollama"
+
+# ─── Routing Configuration ──────────────────────────────────────────────────
+routing:
+  default_strategy: BEST_VALUE
+  fallback_models:
+    - openai-gpt4o
+    - claude-3.5-sonnet
+    - gemini-1.5-flash
+
+# ─── Consensus / LLM Council Configuration ─────────────────────────────────
+consensus:
+  default_council:
+    - openai-gpt4o
+    - claude-3.5-sonnet
+    - gemini-2-pro
+    - deepseek-v3-cloud
+  judge_model: openai-gpt4o
+  consensus_strategy: synthesis
+  min_agreement: 0.6

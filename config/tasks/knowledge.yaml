@@ -1,0 +1,59 @@
+tasks:
+  - id: knowledge-capital-burkina
+    category: knowledge
+    prompt: "What is the capital city of Burkina Faso?"
+    reference_answer: "Ouagadougou"
+    grading_type: llm_judge
+    judge_pattern: reference_based
+    judge_prompt: |
+      Score 1.0 if the answer is Ouagadougou (accept minor spelling variants).
+      Score 0.0 if incorrect.
+
+  - id: knowledge-speed-of-light
+    category: knowledge
+    prompt: "What is the speed of light in a vacuum? Give the value in m/s and explain its significance."
+    reference_answer: "299,792,458 m/s (approximately 3×10^8 m/s). It is a fundamental constant of nature and defines the meter. It is the maximum speed at which information can travel (special relativity)."
+    grading_type: llm_judge
+    judge_pattern: reference_based
+    judge_prompt: |
+      Score 1.0 if the numeric value is correct (~3×10^8 or 299,792,458 m/s) AND includes meaningful context.
+      Score 0.7 if only the number, no context.
+      Score 0.3 if the order of magnitude is right but exact value is wrong.
+      Score 0.0 if completely wrong.
+
+  - id: knowledge-treaty-westphalia
+    category: knowledge
+    prompt: "What was the Peace of Westphalia (1648) and why is it historically significant?"
+    reference_answer: "The Peace of Westphalia (1648) ended the Thirty Years' War in the Holy Roman Empire and the Eighty Years' War between Spain and the Dutch Republic. It is considered the foundation of the modern state system and the principle of state sovereignty (non-interference in internal affairs of other states)."
+    grading_type: llm_judge
+    judge_pattern: reference_based
+    judge_prompt: |
+      Score 1.0 if the answer correctly identifies the year/conflict ended AND the concept of state sovereignty.
+      Score 0.7 if accurate but incomplete (e.g., missing one key element).
+      Score 0.3 for vague or partially correct.
+      Score 0.0 for wrong or irrelevant.
+
+  - id: knowledge-dna-structure
+    category: knowledge
+    prompt: "Describe the double-helix structure of DNA. Who discovered it and when?"
+    reference_answer: "DNA is a double helix of two complementary strands of nucleotides twisted around each other. Discovered by Watson and Crick in 1953, with critical X-ray crystallography data from Rosalind Franklin. Base pairing: A-T and G-C."
+    grading_type: llm_judge
+    judge_pattern: reference_based
+    judge_prompt: |
+      Score 1.0 for accurate description of double helix, correct attribution (Watson & Crick 1953),
+      and mention of Rosalind Franklin's contribution.
+      Score 0.7 for correct structure and discoverers but no mention of Franklin.
+      Score 0.4 for partially correct.
+      Score 0.0 for incorrect.
+
+  - id: knowledge-black-holes
+    category: knowledge
+    prompt: "What is the event horizon of a black hole and what happens at the Schwarzschild radius?"
+    reference_answer: "The event horizon is the boundary around a black hole beyond which nothing, not even light, can escape. The Schwarzschild radius is the critical radius at which an object becomes a black hole — the radius of the event horizon for a non-rotating black hole. rs = 2GM/c²."
+    grading_type: llm_judge
+    judge_pattern: reference_based
+    judge_prompt: |
+      Score 1.0 for correct definitions of both terms with the formula or equivalent explanation.
+      Score 0.7 for correct but missing the formula.
+      Score 0.4 for one correct and one vague.
+      Score 0.0 for incorrect.
