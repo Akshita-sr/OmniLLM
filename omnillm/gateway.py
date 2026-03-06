@@ -7,6 +7,10 @@ LiteLLM, abstracting away provider-specific API differences. It handles:
 - Latency measurement with high-resolution timers
 - Graceful error handling with structured error responses
 - Concurrent multi-model querying via asyncio
+
+Note: ``litellm.drop_params = True`` is set at module level so that
+unsupported parameters (e.g. ``temperature`` for o-series/gpt-5 models) are
+silently dropped rather than raising ``UnsupportedParamsError``.
 """
 
 from __future__ import annotations
@@ -17,7 +21,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import litellm
 import yaml
+
+litellm.drop_params = True
 
 
 @dataclass
@@ -102,7 +109,9 @@ class LLMGateway:
             return f"openai/{model}"
         if provider == "deepseek":
             return f"openai/{model}"
-        # For openai, anthropic, google — LiteLLM uses the model name directly
+        if provider == "google":
+            return f"gemini/{model}"
+        # For openai, anthropic — LiteLLM uses the model name directly
         return model
 
     def _calculate_cost(
@@ -173,15 +182,6 @@ class LLMGateway:
             :class:`ModelResponse` with content, tokens, latency and cost.
             On error, returns a response with ``error`` field set.
         """
-        try:
-            import litellm  # type: ignore[import]
-        except ImportError:
-            return ModelResponse(
-                model_id=model_id,
-                content="",
-                error="litellm is not installed. Run: pip install litellm",
-            )
-
         if model_id not in self._models:
             return ModelResponse(
                 model_id=model_id,
