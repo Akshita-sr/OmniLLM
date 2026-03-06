@@ -1,6 +1,16 @@
 models:
   # ─── Cloud Models ──────────────────────────────────────────────────────────
 
+  openai-gpt54:
+   id: openai-gpt54
+   provider: openai
+   model: gpt-5.4
+   api_key_env: OPENAI_API_KEY
+   cost_per_1m_input: 2.50
+   cost_per_1m_output: 15.00
+   type: cloud
+   description: "OpenAI GPT-5.4 — frontier model for complex professional work"
+
   openai-gpt4o:
     id: openai-gpt4o
     provider: openai
@@ -119,7 +129,7 @@ models:
   deepseek-r1-local:
     id: deepseek-r1-local
     provider: ollama
-    model: deepseek-r1:14b
+    model: deepseek-r1:latest
     api_base: http://localhost:11434
     cost_per_1m_input: 0.00
     cost_per_1m_output: 0.00
@@ -149,7 +159,7 @@ models:
   mistral-local:
     id: mistral-local
     provider: ollama
-    model: mistral:7b
+    model: mistral:latest
     api_base: http://localhost:11434
     cost_per_1m_input: 0.00
     cost_per_1m_output: 0.00

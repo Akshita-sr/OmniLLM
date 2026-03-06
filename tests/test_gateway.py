@@ -121,7 +121,9 @@ class TestLLMGateway:
         # openai-gpt4o: $2.50/1M input, $10.00/1M output
         cost = gw._calculate_cost("openai-gpt4o", 1_000_000, 0)
         assert cost == pytest.approx(2.5)
+        assert cost == pytest.approx(2.5)
         cost = gw._calculate_cost("openai-gpt4o", 0, 1_000_000)
+        assert cost == pytest.approx(10.0)
         assert cost == pytest.approx(10.0)
 
 

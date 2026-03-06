@@ -20,6 +20,7 @@ Can also be invoked as::
 """
 
 from __future__ import annotations
+from dotenv import load_dotenv
 
 import asyncio
 import json
