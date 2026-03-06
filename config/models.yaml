@@ -6,8 +6,8 @@ models:
     provider: openai
     model: gpt-4o
     api_key_env: OPENAI_API_KEY
-    cost_per_1m_input: 5.00
-    cost_per_1m_output: 15.00
+    cost_per_1m_input: 2.50
+    cost_per_1m_output: 10.00
     type: cloud
     description: "OpenAI GPT-4o — multimodal flagship model"
 
@@ -21,10 +21,20 @@ models:
     type: cloud
     description: "OpenAI o1 — advanced reasoning model"
 
+  openai-o1-mini:
+    id: openai-o1-mini
+    provider: openai
+    model: o1-mini
+    api_key_env: OPENAI_API_KEY
+    cost_per_1m_input: 3.00
+    cost_per_1m_output: 12.00
+    type: cloud
+    description: "OpenAI o1-mini — efficient reasoning model"
+
   claude-3.5-sonnet:
     id: claude-3.5-sonnet
     provider: anthropic
-    model: claude-3-5-sonnet-20241022
+    model: claude-3-5-sonnet-latest
     api_key_env: ANTHROPIC_API_KEY
     cost_per_1m_input: 3.00
     cost_per_1m_output: 15.00
@@ -34,7 +44,7 @@ models:
   claude-3-opus:
     id: claude-3-opus
     provider: anthropic
-    model: claude-3-opus-20240229
+    model: claude-3-opus-latest
     api_key_env: ANTHROPIC_API_KEY
     cost_per_1m_input: 15.00
     cost_per_1m_output: 75.00

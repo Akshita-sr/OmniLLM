@@ -118,11 +118,11 @@ class TestLLMGateway:
 
     def test_calculate_cost_cloud(self):
         gw = LLMGateway(config_path=CONFIG_PATH)
-        # openai-gpt4o: $5/1M input, $15/1M output
+        # openai-gpt4o: $2.50/1M input, $10.00/1M output
         cost = gw._calculate_cost("openai-gpt4o", 1_000_000, 0)
-        assert cost == pytest.approx(5.0)
+        assert cost == pytest.approx(2.5)
         cost = gw._calculate_cost("openai-gpt4o", 0, 1_000_000)
-        assert cost == pytest.approx(15.0)
+        assert cost == pytest.approx(10.0)
 
 
 class TestLLMGatewayQuery:
