@@ -126,45 +126,25 @@ models:
 
   # ─── Local Models (Ollama) ─────────────────────────────────────────────────
 
-  deepseek-r1-local:
-    id: deepseek-r1-local
-    provider: ollama
-    model: deepseek-r1:latest
-    api_base: http://localhost:11434
-    cost_per_1m_input: 0.00
-    cost_per_1m_output: 0.00
-    type: local
-    description: "DeepSeek R1 14B — local via Ollama"
-
   qwen-2.5-local:
     id: qwen-2.5-local
     provider: ollama
-    model: qwen2.5:7b
+    model: qwen2.5:3b
     api_base: http://localhost:11434
     cost_per_1m_input: 0.00
     cost_per_1m_output: 0.00
     type: local
-    description: "Qwen 2.5 7B — local via Ollama"
+    description: "Qwen 2.5 3B — local via Ollama"
 
-  llama3-local:
-    id: llama3-local
+  llama3.2-local:
+    id: llama3.2-local
     provider: ollama
-    model: llama3:8b
+    model: llama3.2:3b
     api_base: http://localhost:11434
     cost_per_1m_input: 0.00
     cost_per_1m_output: 0.00
     type: local
-    description: "Meta Llama 3 8B — local via Ollama"
-
-  mistral-local:
-    id: mistral-local
-    provider: ollama
-    model: mistral:latest
-    api_base: http://localhost:11434
-    cost_per_1m_input: 0.00
-    cost_per_1m_output: 0.00
-    type: local
-    description: "Mistral 7B — local via Ollama"
+    description: "Meta Llama 3.2 3B — local via Ollama"
 
 # ─── Routing Configuration ──────────────────────────────────────────────────
 routing:
