@@ -68,7 +68,7 @@ class TestLLMGateway:
         assert isinstance(models, list)
         assert "openai-gpt4o" in models
         assert "claude-3.5-sonnet" in models
-        assert "llama3-local" in models
+        assert "llama3.2-local" in models
 
     def test_list_cloud_models(self):
         gw = LLMGateway(config_path=CONFIG_PATH)
@@ -80,7 +80,7 @@ class TestLLMGateway:
         gw = LLMGateway(config_path=CONFIG_PATH)
         local = gw.list_local_models()
         assert all(gw.get_model_info(m)["type"] == "local" for m in local)
-        assert "llama3-local" in local
+        assert "llama3.2-local" in local
 
     def test_get_model_info_returns_dict(self):
         gw = LLMGateway(config_path=CONFIG_PATH)
@@ -102,7 +102,7 @@ class TestLLMGateway:
 
     def test_build_model_string_ollama(self):
         gw = LLMGateway(config_path=CONFIG_PATH)
-        model_str = gw._build_model_string("llama3-local")
+        model_str = gw._build_model_string("llama3.2-local")
         assert model_str.startswith("ollama/")
         assert "llama3" in model_str
 
@@ -113,7 +113,7 @@ class TestLLMGateway:
 
     def test_calculate_cost_zero_for_local(self):
         gw = LLMGateway(config_path=CONFIG_PATH)
-        cost = gw._calculate_cost("llama3-local", 1000, 500)
+        cost = gw._calculate_cost("llama3.2-local", 1000, 500)
         assert cost == 0.0
 
     def test_calculate_cost_cloud(self):
@@ -121,9 +121,7 @@ class TestLLMGateway:
         # openai-gpt4o: $2.50/1M input, $10.00/1M output
         cost = gw._calculate_cost("openai-gpt4o", 1_000_000, 0)
         assert cost == pytest.approx(2.5)
-        assert cost == pytest.approx(2.5)
         cost = gw._calculate_cost("openai-gpt4o", 0, 1_000_000)
-        assert cost == pytest.approx(10.0)
         assert cost == pytest.approx(10.0)
 
 
