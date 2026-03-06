@@ -104,7 +104,7 @@ class TestLLMGateway:
         gw = LLMGateway(config_path=CONFIG_PATH)
         model_str = gw._build_model_string("llama3.2-local")
         assert model_str.startswith("ollama/")
-        assert "llama3" in model_str
+        assert "llama3.2" in model_str
 
     def test_build_model_string_anthropic(self):
         gw = LLMGateway(config_path=CONFIG_PATH)
