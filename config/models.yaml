@@ -31,65 +31,65 @@ models:
     type: cloud
     description: "OpenAI o1 — advanced reasoning model"
 
-  openai-o1-mini:
-    id: openai-o1-mini
+  openai-o3-mini:
+    id: openai-o3-mini
     provider: openai
-    model: o1-mini
+    model: o3-mini
     api_key_env: OPENAI_API_KEY
-    cost_per_1m_input: 3.00
-    cost_per_1m_output: 12.00
+    cost_per_1m_input: 1.10
+    cost_per_1m_output: 4.40
     type: cloud
-    description: "OpenAI o1-mini — efficient reasoning model"
+    description: "OpenAI o3-mini — efficient reasoning model"
 
-  claude-3.5-sonnet:
-    id: claude-3.5-sonnet
+  claude-sonnet:
+    id: claude-sonnet
     provider: anthropic
-    model: claude-3-5-sonnet-latest
+    model: claude-sonnet-4-6-20250520
     api_key_env: ANTHROPIC_API_KEY
     cost_per_1m_input: 3.00
     cost_per_1m_output: 15.00
     type: cloud
-    description: "Anthropic Claude 3.5 Sonnet — best of Claude family"
+    description: "Anthropic Claude Sonnet 4.6 — best balance of speed and intelligence"
 
-  claude-3-opus:
-    id: claude-3-opus
+  claude-opus:
+    id: claude-opus
     provider: anthropic
-    model: claude-3-opus-latest
+    model: claude-opus-4-6-20250520
     api_key_env: ANTHROPIC_API_KEY
     cost_per_1m_input: 15.00
     cost_per_1m_output: 75.00
     type: cloud
-    description: "Anthropic Claude 3 Opus — most powerful Claude"
+    description: "Anthropic Claude Opus 4.6 — most powerful Claude model"
 
-  gemini-2-pro:
-    id: gemini-2-pro
+  gemini-2.5-pro:
+    id: gemini-2.5-pro
     provider: google
-    model: gemini-2.0-pro
+    model: gemini-2.5-pro
     api_key_env: GOOGLE_API_KEY
-    cost_per_1m_input: 3.50
-    cost_per_1m_output: 10.50
+    cost_per_1m_input: 1.25
+    cost_per_1m_output: 10.00
     type: cloud
-    description: "Google Gemini 2.0 Pro — latest generation"
+    description: "Google Gemini 2.5 Pro — deep reasoning and long-context"
 
-  gemini-1.5-flash:
-    id: gemini-1.5-flash
+  gemini-2.5-flash:
+    id: gemini-2.5-flash
     provider: google
-    model: gemini-1.5-flash
+    model: gemini-2.5-flash
     api_key_env: GOOGLE_API_KEY
-    cost_per_1m_input: 0.075
-    cost_per_1m_output: 0.30
+    cost_per_1m_input: 0.15
+    cost_per_1m_output: 0.60
     type: cloud
-    description: "Google Gemini 1.5 Flash — fast and affordable"
+    description: "Google Gemini 2.5 Flash — fast and affordable"
 
   google-studio-pro:
     id: google-studio-pro
     provider: google
-    model: gemini-1.5-pro
+    model: gemini-2.5-pro
     api_key_env: GOOGLE_STUDIO_KEY
-    cost_per_1m_input: 3.50
-    cost_per_1m_output: 10.50
+    cost_per_1m_input: 1.25
+    cost_per_1m_output: 10.00
     type: cloud
-    description: "Google AI Studio — Gemini 1.5 Pro via AI Studio"
+    description: "Google AI Studio — Gemini 2.5 Pro via AI Studio"
 
   deepseek-v3-cloud:
     id: deepseek-v3-cloud
@@ -151,15 +151,15 @@ routing:
   default_strategy: BEST_VALUE
   fallback_models:
     - openai-gpt4o
-    - claude-3.5-sonnet
-    - gemini-1.5-flash
+    - claude-sonnet
+    - gemini-2.5-flash
 
 # ─── Consensus / LLM Council Configuration ─────────────────────────────────
 consensus:
   default_council:
     - openai-gpt4o
-    - claude-3.5-sonnet
-    - gemini-2-pro
+    - claude-sonnet
+    - gemini-2.5-pro
     - deepseek-v3-cloud
   judge_model: openai-gpt4o
   consensus_strategy: synthesis

@@ -67,7 +67,7 @@ class TestLLMGateway:
         models = gw.list_models()
         assert isinstance(models, list)
         assert "openai-gpt4o" in models
-        assert "claude-3.5-sonnet" in models
+        assert "claude-sonnet" in models
         assert "llama3.2-local" in models
 
     def test_list_cloud_models(self):
@@ -108,7 +108,7 @@ class TestLLMGateway:
 
     def test_build_model_string_anthropic(self):
         gw = LLMGateway(config_path=CONFIG_PATH)
-        model_str = gw._build_model_string("claude-3.5-sonnet")
+        model_str = gw._build_model_string("claude-sonnet")
         assert "claude" in model_str
 
     def test_calculate_cost_zero_for_local(self):
@@ -198,7 +198,7 @@ class TestLLMGatewayQuery:
 
         with patch("litellm.acompletion", side_effect=mock_completion):
             responses = await gw.query_multiple(
-                ["openai-gpt4o", "claude-3.5-sonnet"],
+                ["openai-gpt4o", "claude-sonnet"],
                 [{"role": "user", "content": "hi"}],
             )
 
