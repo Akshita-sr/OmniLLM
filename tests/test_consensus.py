@@ -45,7 +45,7 @@ class TestConsensusConfig:
     def test_custom_values(self):
         config = ConsensusConfig(
             council_models=["model-a"],
-            judge_model="claude-3.5-sonnet",
+            judge_model="claude-sonnet",
             strategy="majority_vote",
             min_agreement=0.8,
         )
@@ -140,10 +140,10 @@ class TestConsensusEngine:
     async def test_weighted_consensus(self):
         gw = _make_gateway_with_responses({
             "openai-gpt4o": "The answer is 42.",
-            "claude-3.5-sonnet": "42 is the answer.",
+            "claude-sonnet": "42 is the answer.",
         })
         config = ConsensusConfig(
-            council_models=["openai-gpt4o", "claude-3.5-sonnet"],
+            council_models=["openai-gpt4o", "claude-sonnet"],
             strategy="weighted",
         )
         engine = ConsensusEngine(gw, config)
