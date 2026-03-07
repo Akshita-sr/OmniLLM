@@ -111,6 +111,8 @@ class LLMGateway:
             return f"openai/{model}"
         if provider == "google":
             return f"gemini/{model}"
+        if provider == "anthropic":          
+            return f"anthropic/{model}"
         # For openai, anthropic — LiteLLM uses the model name directly
         return model
 
