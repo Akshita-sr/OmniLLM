@@ -12,6 +12,17 @@ from omnillm.evaluator import Evaluator, EvalResult, EvalTask
 from omnillm.router import SmartRouter, RouteDecision, RoutingStrategy
 from omnillm.scorer import EloScorer
 from omnillm.consensus import ConsensusEngine, ConsensusConfig, ConsensusResult
+from omnillm.rag import RAGPipeline, RAGResponse
+from omnillm.hri import (
+    HRITaskClassifier,
+    HRITaskType,
+    LanguageDetector,
+    ExperimentCondition,
+    ExperimentManager,
+    ParticipantSession,
+)
+from omnillm.utils.experiment_logger import ExperimentLogger, InteractionRecord
+from omnillm.robotics.gesture_planner import GesturePlanner
 
 __all__ = [
     "LLMGateway",
@@ -26,4 +37,19 @@ __all__ = [
     "ConsensusEngine",
     "ConsensusConfig",
     "ConsensusResult",
+    # RAG pipeline
+    "RAGPipeline",
+    "RAGResponse",
+    # HRI module
+    "HRITaskClassifier",
+    "HRITaskType",
+    "LanguageDetector",
+    "ExperimentCondition",
+    "ExperimentManager",
+    "ParticipantSession",
+    # Utilities
+    "ExperimentLogger",
+    "InteractionRecord",
+    # Robotics
+    "GesturePlanner",
 ]

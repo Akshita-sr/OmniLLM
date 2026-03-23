@@ -124,7 +124,64 @@ models:
     type: cloud
     description: "Alibaba Qwen 2.5 72B — via DashScope"
 
+  # ─── HRI-Optimised Cloud Models (Embodied LLM Arena) ─────────────────────
+
+  openai-gpt4o-mini:
+    id: openai-gpt4o-mini
+    provider: openai
+    model: gpt-4o-mini
+    api_key_env: OPENAI_API_KEY
+    cost_per_1m_input: 0.15
+    cost_per_1m_output: 0.60
+    type: cloud
+    description: "OpenAI GPT-4o-mini — fast, affordable model optimised for HRI tasks"
+    hri_strengths: ["info_retrieval", "social_conversation", "multilingual"]
+
+  claude-haiku:
+    id: claude-haiku
+    provider: anthropic
+    model: claude-haiku-4-5
+    api_key_env: ANTHROPIC_API_KEY
+    cost_per_1m_input: 0.80
+    cost_per_1m_output: 4.00
+    type: cloud
+    description: "Anthropic Claude Haiku — ultra-fast, low-latency HRI responses"
+    hri_strengths: ["social_conversation", "navigation", "multilingual"]
+
+  gemini-flash:
+    id: gemini-flash
+    provider: google
+    model: gemini-2.0-flash
+    api_key_env: GOOGLE_API_KEY
+    cost_per_1m_input: 0.10
+    cost_per_1m_output: 0.40
+    type: cloud
+    description: "Google Gemini Flash — sub-second latency for real-time HRI"
+    hri_strengths: ["navigation", "multilingual", "social_conversation"]
+
   # ─── Local Models (Ollama) ─────────────────────────────────────────────────
+
+  llama3-8b-local:
+    id: llama3-8b-local
+    provider: ollama
+    model: llama3:8b
+    api_base: http://localhost:11434
+    cost_per_1m_input: 0.00
+    cost_per_1m_output: 0.00
+    type: local
+    description: "Meta Llama3 8B — local HRI baseline via Ollama"
+    hri_strengths: ["social_conversation", "info_retrieval"]
+
+  qwen-2.5-7b-local:
+    id: qwen-2.5-7b-local
+    provider: ollama
+    model: qwen2.5:7b
+    api_base: http://localhost:11434
+    cost_per_1m_input: 0.00
+    cost_per_1m_output: 0.00
+    type: local
+    description: "Alibaba Qwen2.5 7B — multilingual local model via Ollama"
+    hri_strengths: ["multilingual", "info_retrieval"]
 
   qwen-2.5-local:
     id: qwen-2.5-local
@@ -153,6 +210,19 @@ routing:
     - openai-gpt4o
     - claude-sonnet
     - gemini-2.5-flash
+  # HRI task-type routing: maps task category → preferred model
+  hri_task_routing:
+    info_retrieval: openai-gpt4o-mini   # RAG-capable, accurate
+    navigation: gemini-flash             # fast, spatial reasoning
+    social_conversation: claude-haiku    # natural, empathetic
+    multilingual: gemini-flash           # best multilingual support
+  # Experimental conditions for Embodied LLM Arena
+  hri_conditions:
+    A: openai-gpt4o-mini   # Fixed cloud baseline
+    B: llama3-8b-local      # Fixed local baseline
+    C: smart_routed         # OmniLLM selects per task
+    D: consensus            # 3-model council synthesis
+    E: no_rag               # RAG-off control (same as A)
 
 # ─── Consensus / LLM Council Configuration ─────────────────────────────────
 consensus:

@@ -35,6 +35,7 @@ class RoutingStrategy(str, Enum):
     LOWEST_LATENCY = "LOWEST_LATENCY"
     BEST_VALUE = "BEST_VALUE"
     LOCAL_PREFERRED = "LOCAL_PREFERRED"
+    TASK_TYPE = "TASK_TYPE"  # HRI: route by task category (T1–T4)
 
 
 @dataclass
@@ -229,6 +230,20 @@ class SmartRouter:
             local = [m for m in candidates if self._models[m].get("type") == "local"]
             if local:
                 candidates = local
+        elif strategy == RoutingStrategy.TASK_TYPE:
+            # Prefer models with explicit hri_strengths for the task category
+            hri_map = self._routing_cfg.get("hri_task_routing", {})
+            preferred = hri_map.get(task_category)
+            if preferred and preferred in self._models and preferred in candidates:
+                candidates = [preferred]
+            else:
+                # Fall back to models that list this task as a strength
+                strength_matches = [
+                    m for m in candidates
+                    if task_category in self._models[m].get("hri_strengths", [])
+                ]
+                if strength_matches:
+                    candidates = strength_matches
 
         def _score(mid: str) -> float:
             q = self._get_quality(mid, task_category)
@@ -240,7 +255,11 @@ class SmartRouter:
                 return -c  # lower cost → higher score
             if strategy == RoutingStrategy.LOWEST_LATENCY:
                 return -lat
-            if strategy in (RoutingStrategy.BEST_VALUE, RoutingStrategy.LOCAL_PREFERRED):
+            if strategy in (
+                RoutingStrategy.BEST_VALUE,
+                RoutingStrategy.LOCAL_PREFERRED,
+                RoutingStrategy.TASK_TYPE,
+            ):
                 return self._calculate_value_score(q, c, lat)
             return q
 
@@ -289,6 +308,39 @@ class SmartRouter:
             task_category=task_category,
             budget_usd=budget_usd,
             strategy=strategy,
+        )
+
+    def route_for_hri_task(
+        self,
+        hri_task_type: str,
+        budget_usd: float | None = None,
+        max_latency_ms: float | None = None,
+    ) -> RouteDecision:
+        """Route to the optimal model for an HRI task type (T1–T4).
+
+        Maps task types from the Embodied LLM Arena experiment to the best model
+        using the ``TASK_TYPE`` strategy and ``hri_task_routing`` config.
+
+        HRI task types:
+        - ``info_retrieval`` — T1: factual/RAG queries (lab info, personnel, schedule)
+        - ``navigation`` — T2: spatial guidance (room directions, pointing)
+        - ``social_conversation`` — T3: open-ended chat (empathy, naturalness)
+        - ``multilingual`` — T4: non-English interaction (auto-detected language)
+
+        Args:
+            hri_task_type: One of ``"info_retrieval"``, ``"navigation"``,
+                ``"social_conversation"``, or ``"multilingual"``.
+            budget_usd: Optional per-query budget in USD.
+            max_latency_ms: Optional maximum latency constraint.
+
+        Returns:
+            :class:`RouteDecision` targeting the HRI-optimal model.
+        """
+        return self.route(
+            task_category=hri_task_type,
+            budget_usd=budget_usd,
+            max_latency_ms=max_latency_ms,
+            strategy=RoutingStrategy.TASK_TYPE,
         )
 
     def update_scores(self, eval_results: list[dict[str, Any]]) -> None:

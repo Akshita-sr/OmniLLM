@@ -162,3 +162,44 @@ class TestSmartRouter:
             decision = router.route(strategy=strategy)
             assert decision.model_id in router._models
             assert isinstance(decision.confidence, float)
+
+    def test_task_type_strategy_exists(self):
+        strategies = [s.value for s in RoutingStrategy]
+        assert "TASK_TYPE" in strategies
+
+    def test_route_for_hri_task_info_retrieval(self):
+        router = SmartRouter(config_path=CONFIG_PATH)
+        decision = router.route_for_hri_task("info_retrieval")
+        assert isinstance(decision, RouteDecision)
+        assert decision.model_id in router._models
+        assert decision.strategy_used == RoutingStrategy.TASK_TYPE
+
+    def test_route_for_hri_task_navigation(self):
+        router = SmartRouter(config_path=CONFIG_PATH)
+        decision = router.route_for_hri_task("navigation")
+        assert isinstance(decision, RouteDecision)
+        assert decision.model_id in router._models
+
+    def test_route_for_hri_task_social(self):
+        router = SmartRouter(config_path=CONFIG_PATH)
+        decision = router.route_for_hri_task("social_conversation")
+        assert isinstance(decision, RouteDecision)
+        assert decision.model_id in router._models
+
+    def test_route_for_hri_task_multilingual(self):
+        router = SmartRouter(config_path=CONFIG_PATH)
+        decision = router.route_for_hri_task("multilingual")
+        assert isinstance(decision, RouteDecision)
+        assert decision.model_id in router._models
+
+    def test_route_for_hri_task_uses_hri_routing_config(self):
+        router = SmartRouter(config_path=CONFIG_PATH)
+        # info_retrieval is mapped to openai-gpt4o-mini in models.yaml
+        decision = router.route_for_hri_task("info_retrieval")
+        assert decision.model_id == "openai-gpt4o-mini"
+
+    def test_route_for_hri_task_with_budget(self):
+        router = SmartRouter(config_path=CONFIG_PATH)
+        decision = router.route_for_hri_task("navigation", budget_usd=0.0)
+        # Budget=0 forces local (free) model
+        assert router._get_cost_per_query(decision.model_id) == pytest.approx(0.0)
