@@ -8,6 +8,8 @@ A living, plugin-based platform for multi-LLM comparison, smart routing, consens
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/Akshita-sr/OmniLLM/pulls)
 
+> 🆕 **New to this project?** Start with **[GETTING_STARTED.md](GETTING_STARTED.md)** — a beginner-friendly guide that explains the codebase from scratch, walks through every module, and shows you how to run the project step-by-step.
+
 ---
 
 ## 🎯 Goal & Objective
