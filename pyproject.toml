@@ -42,8 +42,15 @@ robotics = [
     "websockets>=12.0",
     "flask>=3.0",
 ]
+hri = [
+    "chromadb>=0.4.0",
+    "langchain-community>=0.2.0",
+    "sentence-transformers>=3.0",
+    "pypdf>=4.0",
+    "langdetect>=1.0.9",
+]
 all = [
-    "omnillm[dev,robotics]",
+    "omnillm[dev,robotics,hri]",
 ]
 
 [project.scripts]
