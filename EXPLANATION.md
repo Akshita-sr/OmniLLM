@@ -15,7 +15,7 @@
 5. [Module Deep-Dive — What Each Python File Does and Why](#5-module-deep-dive--what-each-python-file-does-and-why)
 6. [Features Reference — Everything OmniLLM Can Do](#6-features-reference--everything-omnillm-can-do)
 7. [Complete Terminal Commands Reference](#7-complete-terminal-commands-reference)
-8. [All Tools and Libraries Used](#8-all-all-tools-and-libraries-used)
+8. [All Tools and Libraries Used](#8-all-tools-and-libraries-used)
 9. [Connecting to the Old Pepper Robot (NAOqi + Choregraphe + Python 2.7)](#9-connecting-to-the-old-pepper-robot-naoqi--choregraphe--python-27)
 10. [Step-by-Step Setup from Zero](#10-step-by-step-setup-from-zero)
 11. [Troubleshooting for Beginners](#11-troubleshooting-for-beginners)
@@ -140,7 +140,7 @@ Pepper robot:
 
 | File | What it is |
 |---|---|
-| `config/models.yaml` | **The model registry** — every AI model available, with its provider, API key variable, and pricing. Adding a new model = adding 7 lines here. |
+| `config/models.yaml` | **The model registry** — every AI model available, with its provider, API key variable, and pricing. Adding a new model = adding 7–8 lines here. |
 | `config/tasks/reasoning.yaml` | Test questions for logical reasoning (e.g., "If all A are B and all B are C, are all A C?") |
 | `config/tasks/knowledge.yaml` | Test questions for factual knowledge (e.g., "What is the capital of France?") |
 | `config/tasks/code.yaml` | Test questions for code generation/debugging |
