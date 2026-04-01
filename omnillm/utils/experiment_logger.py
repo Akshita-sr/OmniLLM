@@ -134,6 +134,11 @@ class ExperimentLogger:
     def __init__(self) -> None:
         self._records: list[InteractionRecord] = []
 
+    @property
+    def records(self) -> list[InteractionRecord]:
+        """Read-only view of all logged interaction records."""
+        return list(self._records)
+
     def log_interaction(
         self,
         session_id: str,
