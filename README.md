@@ -8,7 +8,8 @@
 [![Tests](https://img.shields.io/badge/tests-278%20passing-brightgreen.svg)](#-testing)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/Akshita-sr/OmniLLM/pulls)
 
-> 🆕 **New to this project?** Start with **[GETTING_STARTED.md](GETTING_STARTED.md)** — a beginner-friendly guide from scratch.
+> 🆕 **New to this project?** Start with **[GETTING_STARTED.md](GETTING_STARTED.md)** — a beginner-friendly guide from scratch.  
+> 📖 **Want a complete deep-dive?** See **[EXPLANATION.md](EXPLANATION.md)** — every file, every command, and a full Pepper/NAOqi/Choregraphe guide.
 
 ---
 
