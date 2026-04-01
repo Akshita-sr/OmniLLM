@@ -1,0 +1,16 @@
+event_id,title,date,start_time,end_time,location,type,speaker,description,open_to_visitors
+E001,Weekly Lab Meeting,2026-04-01,09:30,10:30,Room 305,meeting,All lab members,Status updates and paper discussion,No
+E002,Guest Lecture: Ivan Petrov,2026-04-04,14:00,15:30,Seminar Room B-201,seminar,Prof. Ivan Petrov,Deep learning for robot perception,Yes
+E003,OmniLLM User Study — Session 1,2026-04-05,10:00,12:00,Room 307,experiment,Alice Chen,HRI experiment with Pepper robot (5 participants),No
+E004,Ethics Committee Review,2026-04-04,13:00,14:00,Room 305,meeting,Julia Santos,Presentation of study protocol,No
+E005,Robotics Reading Group,2026-04-03,12:00,13:00,Room 310,seminar,Rotating,Paper: "LLM-Grounded Navigation" (Okonkwo),Yes
+E006,OmniLLM User Study — Session 2,2026-04-07,14:00,16:00,Room 307,experiment,Alice Chen,HRI experiment with Pepper robot (5 participants),No
+E007,PhD Progress Review — Alice Chen,2026-04-08,10:00,11:00,Room 305,review,Alice Chen,12-month progress report,No
+E008,Department Colloquium,2026-04-10,15:00,16:30,Lecture Hall D-100,seminar,Prof. Martinez,Embodied AI: From Benchmarks to Robots,Yes
+E009,Lab Open Day,2026-04-15,13:00,17:00,Room 305,open_day,All staff,Robot demonstrations for prospective students,Yes
+E010,ICRA Paper Deadline,2026-04-18,23:59,23:59,Online,deadline,Dr. Patel,Camera-ready submission due,No
+E011,OmniLLM User Study — Session 3,2026-04-19,10:00,12:00,Room 307,experiment,Alice Chen,HRI experiment with Pepper robot (5 participants),No
+E012,Industry Partner Visit: Robotics Corp,2026-04-01,10:00,12:00,Room 305,visit,Bob Nguyen,Demo of autonomous navigation module,No
+E013,Safety Training Refresh,2026-04-22,14:00,15:00,Room 305,training,Lab Manager,Annual mandatory safety training,No
+E014,Visiting Researcher Seminar — Carol Dupont,2026-04-24,11:00,12:00,Room 310,seminar,Carol Dupont,Affective computing for social robots,Yes
+E015,Monthly Lab Social,2026-04-30,17:00,19:00,Room 310,social,All lab members,End-of-month get-together,Yes

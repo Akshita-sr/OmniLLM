@@ -13,3 +13,15 @@ pytest-mock>=3.12
 
 # Robotics (optional)
 websockets>=12.0
+flask>=3.0
+
+# HRI / Embodied LLM Arena (optional — install with pip install "omnillm[hri]")
+# chromadb>=0.4.0
+# langchain-community>=0.2.0
+# sentence-transformers>=3.0
+# pypdf>=4.0
+# langdetect>=1.0.9
+# langgraph>=0.2.0
+# openai-whisper  (for local STT)
+# openai>=1.0     (for Whisper API STT)
+

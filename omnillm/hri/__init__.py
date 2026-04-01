@@ -45,6 +45,9 @@ from omnillm.hri.classifier import HRITaskClassifier, HRITaskType
 from omnillm.hri.experiment import ExperimentCondition, ExperimentManager, ParticipantSession
 from omnillm.hri.language_detector import LanguageDetector
 
+# agent_graph is imported lazily (requires langgraph optional dependency)
+# Use: from omnillm.hri.agent_graph import build_hri_graph, HRIGraphState
+
 __all__ = [
     "HRITaskClassifier",
     "HRITaskType",
@@ -52,4 +55,18 @@ __all__ = [
     "ExperimentCondition",
     "ExperimentManager",
     "ParticipantSession",
+    "build_hri_graph",
+    "HRIGraphState",
 ]
+
+
+def build_hri_graph(*args, **kwargs):  # type: ignore[misc]
+    """Lazy import shim for :func:`~omnillm.hri.agent_graph.build_hri_graph`."""
+    from omnillm.hri.agent_graph import build_hri_graph as _build
+    return _build(*args, **kwargs)
+
+
+def HRIGraphState(*args, **kwargs):  # type: ignore[misc]  # noqa: N802
+    """Lazy import shim for :class:`~omnillm.hri.agent_graph.HRIGraphState`."""
+    from omnillm.hri.agent_graph import HRIGraphState as _State
+    return _State(*args, **kwargs)

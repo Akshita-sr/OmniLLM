@@ -48,6 +48,7 @@ hri = [
     "sentence-transformers>=3.0",
     "pypdf>=4.0",
     "langdetect>=1.0.9",
+    "langgraph>=0.2.0",
 ]
 all = [
     "omnillm[dev,robotics,hri]",

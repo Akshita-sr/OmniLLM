@@ -1,666 +1,713 @@
 # 🧠 OmniLLM
 
-> **Compare, Route, and Orchestrate Every LLM — Today and Tomorrow**
-
-A living, plugin-based platform for multi-LLM comparison, smart routing, consensus ensembles, and future robotics integration.
+> **Compare, Route, and Orchestrate Every LLM — Today and Tomorrow**  
+> *Now powering the* ***Embodied LLM Arena*** *— the first study to benchmark LLMs through social robot interaction*
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Tests](https://img.shields.io/badge/tests-278%20passing-brightgreen.svg)](#-testing)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/Akshita-sr/OmniLLM/pulls)
 
-> 🆕 **New to this project?** Start with **[GETTING_STARTED.md](GETTING_STARTED.md)** — a beginner-friendly guide that explains the codebase from scratch, walks through every module, and shows you how to run the project step-by-step.
+> 🆕 **New to this project?** Start with **[GETTING_STARTED.md](GETTING_STARTED.md)** — a beginner-friendly guide from scratch.
 
 ---
 
-## 🎯 Goal & Objective
+## 📑 Table of Contents
+
+1. [Goal & Vision](#-goal--vision)
+2. [What's New — Embodied LLM Arena](#-whats-new--embodied-llm-arena)
+3. [System Architecture](#-system-architecture)
+4. [Module Overview](#-module-overview)
+5. [State of the Art](#-state-of-the-art)
+6. [Evaluation Axes](#-evaluation-axes)
+7. [Installation & Setup](#-installation--setup)
+8. [Usage Guide](#-usage-guide)
+   - [CLI Commands](#cli-commands)
+   - [Running the Pepper AI Server](#running-the-pepper-ai-server)
+   - [LangGraph Agent Pipeline](#langgraph-agent-pipeline)
+   - [RAG Knowledge Base](#rag-knowledge-base)
+   - [HRI Experiment Manager](#hri-experiment-manager)
+   - [Questionnaire & ELO Scoring](#questionnaire--elo-scoring)
+9. [Experimental Design](#-experimental-design)
+10. [Knowledge Base Files](#-knowledge-base-files)
+11. [Automatic Evaluation Pipeline](#-automatic-evaluation-pipeline)
+12. [Project Structure](#-project-structure)
+13. [Contributing](#-contributing)
+14. [License](#-license)
+
+---
+
+## 🎯 Goal & Vision
 
 OmniLLM is a **living, extensible platform** for comparing, evaluating, and routing prompts across multiple Large Language Models simultaneously. It goes far beyond simple model comparison:
 
-- **Smart Routing**: Learns from evaluation history to automatically select the best model for each task within your budget and latency constraints
-- **Cost Tracking**: Real-time spend tracking per model, per session — understand exactly what each query costs
-- **Consensus Ensembles**: The "LLM Council" architecture dispatches prompts to multiple models simultaneously and synthesises a superior combined answer
-- **Robotics Bridge**: Abstract bridge pattern for connecting the best LLM (or ensemble) to social robots — Pepper, NAO, and Buddy
-- **Plugin Architecture**: Adding a new model requires only 5 lines of YAML — **zero code changes**
-- **LLM-as-Judge Evaluation**: Three research-backed patterns for automated, dynamic evaluation
+| Capability | Description |
+|---|---|
+| **🔀 Smart Routing** | Learns from evaluation history to auto-select the best model per task within budget/latency constraints |
+| **💰 Cost Tracking** | Real-time spend tracking per model, per session |
+| **🗳️ Consensus Ensembles** | "LLM Council" dispatches to multiple models and synthesises a superior combined answer |
+| **🤖 Embodied LLM Arena** | Benchmarks LLMs through real human-robot interaction with Pepper — the world's first such study |
+| **🧠 LangGraph Pipeline** | Full multi-node agent graph: Whisper STT → Language Detection → Task Classification → RAG / Direct LLM → Robot Action Plan |
+| **📚 RAG Knowledge Base** | ChromaDB-backed retrieval-augmented generation over lab documents (visitor profiles, schedules, maps, FAQs) |
+| **📊 LLM-as-Judge** | Three research-backed evaluation patterns (Referenceless, Reference-Based, Pairwise) |
+| **🔌 Plugin Architecture** | Adding a new model requires only 5 lines of YAML — zero code changes |
 
-The ultimate vision: connect the best LLM or ensemble of LLMs to social robots for truly capable embodied AI — an AI brain that is never locked to a single model.
-
----
-
-## 🧩 What Problem Does This Solve?
-
-### 1. 🆕 The "New Model Every Day" Problem
-New LLMs are released weekly (sometimes daily). Traditional comparison tools require code changes to add each new model. **OmniLLM uses a YAML-based plugin architecture** — adding GPT-5 when it releases looks like:
-
-```yaml
-gpt-5:
-  provider: openai
-  model: gpt-5
-  api_key_env: OPENAI_API_KEY
-  cost_per_1m_input: 10.00
-  cost_per_1m_output: 30.00
-  type: cloud
-```
-
-That's it. No Python code to modify. No imports to update.
-
-### 2. 📊 Benchmark Staleness & Data Contamination
-Static benchmarks (MMLU, HumanEval) get "gamed" — models see test data during training, inflating scores. **OmniLLM supports**:
-- LLM-as-Judge evaluation (3 patterns): Referenceless, Reference-Based, Pairwise
-- Custom dynamic task creation via YAML
-- Contamination-resistant evaluation design
-- ELO-based leaderboards from pairwise comparisons (like LMSYS Chatbot Arena)
-
-### 3. 🔀 API Fragmentation
-OpenAI, Anthropic, Google, Mistral, local Ollama models — each has a different API. **OmniLLM uses [LiteLLM](https://github.com/BerriAI/litellm)** as a unified gateway to call 100+ LLM providers through one interface.
-
-### 4. 🗺️ "Which Model for Which Task?"
-A powerful model for a simple greeting is wasteful. A cheap model for complex reasoning is unreliable. **OmniLLM's Smart Router** learns from evaluation history to automatically route each prompt to the optimal model:
-- `BEST_QUALITY` — highest-scoring model for that task category
-- `LOWEST_COST` — cheapest model with acceptable quality
-- `LOWEST_LATENCY` — fastest response time
-- `BEST_VALUE` — composite quality/cost/speed optimisation
-- `LOCAL_PREFERRED` — prefer free local Ollama models first
-
-### 5. 🤝 Single Model Point of Failure
-Any single model can hallucinate, refuse, or give incorrect answers. **The Multi-Model Consensus Engine** ("LLM Council") solves this:
-- Dispatches every prompt to multiple models simultaneously
-- Analyses responses for agreement (semantic similarity clustering)
-- Synthesises a superior combined answer via a judge LLM
-- Dramatically reduces hallucinations by filtering minority errors
-
-### 6. 🤖 LLM ↔ Robot Gap
-Connecting LLMs to physical robots requires bridging the gap between natural language and structured robot commands, between modern Python 3.x AI stacks and legacy Python 2.7 robot SDKs (NAOqi), and between cloud LLMs and low-latency robot action loops. **OmniLLM's Abstract Bridge Pattern** provides clean integrations for Pepper, NAO, and Buddy robots.
+The ultimate vision: connect the best LLM or ensemble of LLMs to social robots for truly capable embodied AI — **an AI brain that is never locked to a single model**.
 
 ---
 
-## 🏛️ State of the Art — Literature Review
+## 🆕 What's New — Embodied LLM Arena
 
-### 4a. The Collapse of Static Benchmarks
+### The Research Gap
 
-Static benchmarks — MMLU, HumanEval, GSM8K — have become unreliable measures of true LLM capability due to three converging problems:
+Current LLM evaluations (MMLU, Chatbot Arena, LiveBench) are **entirely text-based**. Social robot studies that use LLMs connect only a single model (typically ChatGPT). **No study has**:
 
-**Data Contamination**: Models are trained on web-scraped data that often includes benchmark test sets. A comprehensive study on contamination detection (arXiv:2502.17521) identifies four detection methods: Collision Rate, Repeat Trials, Membership Inference, and Chronological Analysis. The paper "Benchmarking LLMs Under Data Contamination: Static to Dynamic" (EMNLP 2025) demonstrates that models routinely score above their "true" capability on contaminated benchmarks.
+- (a) compared multiple LLMs as interchangeable backends for a social robot
+- (b) applied dynamic smart routing between models during live HRI
+- (c) evaluated whether LLM rankings change when evaluated through embodied interaction rather than text-only benchmarks
 
-**Benchmark Saturation**: When top models all score >80% on MMLU, the benchmark no longer discriminates between them for real-world tasks. MMLU scores above 80% essentially stop predicting downstream performance.
+### Research Hypotheses
 
-**Benchmark Errors vs. Model Errors**: The provocatively titled study "Garbage In, Reasoning Out?" (arXiv:2506.23864) shows that many "wrong" model answers are actually correct responses to ambiguous or erroneous benchmark questions.
+| # | Hypothesis |
+|---|---|
+| **H1** | LLM quality rankings from embodied HRI will differ significantly from text-only benchmark rankings |
+| **H2** | Dynamic smart routing between LLMs based on task type and language will produce higher user satisfaction than any single fixed-model configuration |
+| **H3** | RAG-augmented responses will be rated significantly more accurate and trustworthy across all LLM backends |
 
-**The Solution — Dynamic Evaluation**:
-- [DyCodeEval](https://arxiv.org/abs/2503.04149): Dynamically generates code evaluation tasks to prevent memorisation
-- [LiveBench](https://livebench.ai) (ICLR 2025): Monthly-updated benchmark with tasks based on recent events that models couldn't have seen during training
-- Custom task YAML files in OmniLLM enable the same dynamic evaluation approach
+### The Four Task Types
 
-### 4b. LLM-as-a-Judge — The New Evaluation Paradigm
+| Task | Name | Examples | Why Robot is Essential |
+|---|---|---|---|
+| **T1** | Information Retrieval | "What time does the lab open?" / "Tell me about Prof. X" | Pepper greets visitors, uses tablet to show info, gestures while explaining |
+| **T2** | Navigation / Guidance | "Where is Room 305?" / "Point me to the cafeteria" | Pepper physically points in directions, shows map on tablet |
+| **T3** | Social Conversation | "How are you?" / "What do you think about AI?" | Physical presence creates social pressure; eye contact and gestures change perceived quality |
+| **T4** | Multilingual | Repeat any task in a different language | Robot's embodiment makes multilingual experience more immersive |
 
-Human evaluation is the gold standard but is expensive and slow. **LLM-as-Judge** uses a capable model (typically GPT-4o or Claude 3 Opus) to score other models' responses. Three research-validated patterns:
+### Five Experimental Conditions
 
-1. **Referenceless (G-Eval)**: The judge evaluates response quality on its own merits — coherence, accuracy, helpfulness — without needing a gold-standard answer. Best for open-ended questions.
-
-2. **Reference-Based**: The judge compares the response to a provided reference answer, scoring semantic accuracy and completeness. Best for factual tasks.
-
-3. **Pairwise Comparison**: The judge sees two responses side-by-side and declares a winner. OmniLLM implements **position-swapping** (running the comparison twice with A/B swapped) to eliminate the well-documented position bias in LLM judges.
-
-A comprehensive survey ([arXiv:2412.05579](https://arxiv.org/abs/2412.05579) "LLMs-as-Judges: A Comprehensive Survey") covers 2,700+ papers on this paradigm. [arXiv:2503.22458](https://arxiv.org/abs/2503.22458) extends the framework to multi-turn conversational evaluation.
-
-**ELO Rating Systems**: The [LMSYS Chatbot Arena](https://chat.lmsys.org/?leaderboard) demonstrates that pairwise comparisons + ELO ratings produce more reliable rankings than absolute scores. OmniLLM's `EloScorer` implements this methodology — 100 ELO points ≈ 64% head-to-head win rate.
-
-### 4c. Multi-Model Consensus & Ensembles
-
-**The Core Insight**: Multiple imperfect reasoners can collectively outperform any individual reasoner if their errors are independent and uncorrelated. This is the statistical basis for ensemble methods in ML — and it applies to LLMs.
-
-The **"LLM Council" architecture** (inspired by Karpathy) follows four phases:
-1. **Broadcaster**: Send the prompt to all council members concurrently
-2. **Independent Generation**: Each model responds without seeing others' answers
-3. **Consensus Analysis**: Compute semantic similarity, identify agreement clusters
-4. **Final Verdict**: A judge LLM synthesises the best combined answer
-
-[arXiv:2601.07245](https://arxiv.org/abs/2601.07245) "Learning to Trust the Crowd: Multi-Model Consensus Reasoning Engine" provides theoretical and empirical foundations. MDPI's "Multiple Large AI Models' Consensus for Object Detection" extends the approach to multimodal settings.
-
-**Benefits**:
-- Reduces hallucinations (errors in minority cluster are filtered)
-- Improves calibration (uncertainty is surfaced when models disagree)
-- Critical for safety-sensitive robotics: no single hallucination can trigger dangerous robot actions
-
-See also: [Awesome-LLM-Ensemble](https://github.com/jxzhangjhu/Awesome-LLM-Ensemble)
-
-### 4d. Dynamic Routing & Cost Optimisation
-
-Not every task requires GPT-4o. Routing based on task complexity can reduce costs by up to 75% in RAG applications (Latitude AI Blog) while maintaining output quality.
-
-**LiteLLM's built-in routing strategies**:
-- **Simple-Shuffle**: Round-robin across equivalent models
-- **Least-Busy**: Route to the least-loaded model endpoint
-- **Latency-Based**: Route to the historically fastest model
-- **Usage-Based**: Enforce per-model budget limits
-
-**OmniLLM's SmartRouter** extends these with learning from evaluation history:
-- Tracks quality scores per model per task category
-- Computes a composite value score (quality × 0.5 + cost_savings × 0.3 + speed × 0.2)
-- Complexity heuristic: short prompts → cheap model, long/complex → powerful model
-- LoRA-based SLM router for production deployments (classifies prompt type)
-
-### 4e. LLMs + Robotics Integration
-
-The integration of LLMs with physical robots is an active research frontier:
-
-**Motion Planning**: "LLMs as NAO Robot 3D Motion Planners" (ICCV 2025 Workshop) demonstrates LLM-generated 3D motion trajectories for humanoid robots. The key insight: LLMs encode implicit knowledge about physical constraints from training on engineering texts.
-
-**Social Robotics**: "LLM Enabled Social Robots – Aged Care" (IEEE) shows that LLM-powered Pepper robots significantly improve quality of interaction with elderly users — more natural conversations, better context retention across sessions.
-
-**Modular Architecture**: "Trinity: Modular Humanoid Robot AI System" ([arXiv:2503.08338](https://arxiv.org/abs/2503.08338)) proposes a 3-layer architecture: Perception → LLM Reasoning → Actuation. OmniLLM's bridge pattern follows this modularity principle.
-
-**Review Papers**: "Integrating LLMs into Robotic Autonomy: A Review" (MDPI AI) and "LLM-Powered Multi-Session HRI" (Frontiers in Robotics) provide comprehensive overviews of the state of the art.
-
-**The Python 2.7 Challenge**: NAOqi (the Pepper/NAO SDK) is locked to Python 2.7, while modern AI requires Python 3.11+. The solution (from the Theseus thesis on NAO-LLM integration) is a two-process bridge: a Python 2.7 NAOqi client handles robot I/O, communicating via HTTP with a Python 3.x AI server running LiteLLM.
-
-**ROS2 Navigation**: "Latency-Aware Benchmarking for ROS2 Navigation" (PMC article) demonstrates LLM-to-Nav2 goal generation. OmniLLM's `parse_nav2_goal()` utility converts natural language into `geometry_msgs/PoseStamped` JSON.
-
-**Practical Examples**: DeepSeek R1 controlling a robotic arm in a checkers game (HuggingFace Blog) shows that even local, open-source models can provide reliable robot control when properly prompted.
-
-For a comprehensive collection of papers, see: [Awesome LLM-Robotics](https://github.com/GT-RIPL/Awesome-LLM-Robotics)
-
-### 4f. Key Leaderboards & Live Resources
-
-| Resource | Description | URL |
-|----------|-------------|-----|
-| LMSYS Chatbot Arena | Pairwise human evaluation leaderboard | [chat.lmsys.org](https://chat.lmsys.org/?leaderboard) |
-| HuggingFace Open LLM Leaderboard | Automated benchmark leaderboard | [huggingface.co/spaces/HuggingFaceH4/open_llm_leaderboard](https://huggingface.co/spaces/HuggingFaceH4/open_llm_leaderboard) |
-| LiveBench | Contamination-free monthly-updated benchmark | [livebench.ai](https://livebench.ai) |
-| Awesome Data Contamination | Curated list of contamination research | [github.com/liyucheng09/Contamination_Detector](https://github.com/liyucheng09/Contamination_Detector) |
-| Awesome LLM-Robotics | LLM + robotics papers collection | [github.com/GT-RIPL/Awesome-LLM-Robotics](https://github.com/GT-RIPL/Awesome-LLM-Robotics) |
-| Awesome LLM Ensemble | Ensemble/consensus methods collection | [github.com/jxzhangjhu/Awesome-LLM-Ensemble](https://github.com/jxzhangjhu/Awesome-LLM-Ensemble) |
+| Condition | Description | What It Tests |
+|---|---|---|
+| **A** | Fixed Cloud LLM (GPT-4o-mini for all tasks) | Baseline cloud performance |
+| **B** | Fixed Local LLM (Llama3:8b via Ollama) | Baseline local/free performance |
+| **C** | Smart-Routed (OmniLLM selects best model per task) | Smart routing effectiveness |
+| **D** | Consensus / Council (3 models answer, best synthesised) | Consensus vs. single model |
+| **E** | RAG-Off Control (same as A but without RAG) | Isolates RAG contribution |
 
 ---
 
-## 🏗️ Architecture
+## 🏛️ System Architecture
 
 ```
-┌────────────────────────────────────────────────────────────────────────────┐
-│                           OmniLLM Platform                                 │
-│                                                                            │
-│  ┌──────────────────┐      ┌─────────────────────────────────────────────┐ │
-│  │  Model Registry  │      │          Unified LLM Gateway (LiteLLM)      │ │
-│  │  (models.yaml)   │─────▶│  OpenAI │ Anthropic │ Google │ DeepSeek   │ │
-│  │  14 models       │      │  Qwen   │ Ollama (local)  │ 100+ others   │ │
-│  └──────────────────┘      └──────────────────────┬──────────────────────┘ │
-│                                                    │                        │
-│  ┌─────────────────────────────────────────────────┼──────────────────────┐ │
-│  │                    Core Engines                  │                      │ │
-│  │                                                  ▼                      │ │
-│  │  ┌──────────────────┐    ┌──────────────────────────────────────────┐  │ │
-│  │  │ Evaluation Engine│    │    Consensus Engine (LLM Council)        │  │ │
-│  │  │                  │    │  Broadcaster → Independent Generation    │  │ │
-│  │  │ • Referenceless  │    │  → Consensus Analysis → Final Verdict   │  │ │
-│  │  │ • Reference-Based│    └──────────────────────────────────────────┘  │ │
-│  │  │ • Pairwise       │                                                  │ │
-│  │  └────────┬─────────┘    ┌──────────────────────────────────────────┐  │ │
-│  │           │              │         Smart Router                     │  │ │
-│  │           ▼              │  BEST_QUALITY │ LOWEST_COST │ BEST_VALUE │  │ │
-│  │  ┌────────────────┐      │  LOWEST_LATENCY │ LOCAL_PREFERRED        │  │ │
-│  │  │  ELO Scorer    │      └──────────────────────────────────────────┘  │ │
-│  │  │  (Leaderboard) │                                                  │ │
-│  │  └────────────────┘                                                  │ │
-│  └──────────────────────────────────────────────────────────────────────┘ │
-│                                                                            │
-│  ┌──────────────────────────────────────────────────────────────────────┐  │
-│  │                      Robotics Bridge Layer                           │  │
-│  │  ┌────────────────┐  ┌────────────────┐  ┌─────────────────────┐   │  │
-│  │  │  PepperBridge  │  │   NAOBridge    │  │    BuddyBridge      │   │  │
-│  │  │  NAOqi/HTTP    │  │  NAOqi/HTTP    │  │  Android WebSocket  │   │  │
-│  │  │  Py2.7→3.x     │  │  Py2.7→3.x    │  │  Streaming tokens   │   │  │
-│  │  └────────────────┘  └────────────────┘  └─────────────────────┘   │  │
-│  │                    ROS2 Nav2 goal parsing                           │  │
-│  └──────────────────────────────────────────────────────────────────────┘  │
-│                                                                            │
-│  ┌───────────────────┐  ┌────────────────┐  ┌──────────────────────────┐  │
-│  │   CLI Dashboard   │  │  Cost Tracker  │  │    Export Engine         │  │
-│  │   Rich + Click    │  │  Per-model,    │  │  CSV │ JSON │ Markdown   │  │
-│  │   10+ commands    │  │  per-session   │  │                          │  │
-│  └───────────────────┘  └────────────────┘  └──────────────────────────┘  │
-└────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                        HUMAN PARTICIPANT                             │
+│           Speaks to Pepper → Sees tablet → Hears response            │
+└────────────────────────────┬────────────────────────────────────────┘
+                             │ Voice (microphone)
+                             ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│              PEPPER ROBOT  (Python 2.7 — NAOqi Process)             │
+│                                                                      │
+│  ALAudioDevice ──capture WAV──▶ HTTP POST to AI Server              │
+│  ALAnimatedSpeech ◀── response text ── HTTP response                │
+│  ALMotion       ◀── gesture commands ── JSON action plan            │
+│  ALTabletService◀── display content ── HTML/image URL               │
+│  ALFaceDetection → triggers interaction start                       │
+│                                                                      │
+│       ↕  HTTP (localhost:5000 / omnillm.server.app)  ↕              │
+└─────────────────────────────────────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│              AI SERVER  (Python 3.11+ — omnillm.server.app)         │
+│                                                                      │
+│  ┌───────────────────────────────────────────────────────────────┐  │
+│  │              LangGraph Agent Graph  (hri/agent_graph.py)      │  │
+│  │                                                                │  │
+│  │  [START] → [Transcribe Audio (Whisper STT)]                   │  │
+│  │         → [Detect Language]                                    │  │
+│  │         → [Classify Task Type  T1/T2/T3/T4]                   │  │
+│  │         → [CONDITIONAL ROUTING]                                │  │
+│  │              ├─ T1 Info Retrieval  → [RAG Pipeline]           │  │
+│  │              ├─ T2 Navigation      → [RAG + Gesture Planner]  │  │
+│  │              ├─ T3 Social Chat     → [Direct LLM]             │  │
+│  │              └─ T4 Multilingual    → [Language-Optimal LLM]   │  │
+│  │         → [OmniLLM Smart Router / Council]                     │  │
+│  │         → [Generate Robot Action Plan]                         │  │
+│  │         → [Log Everything  (ExperimentLogger)]                 │  │
+│  │         → [RESPOND to Pepper via HTTP]                         │  │
+│  └───────────────────────────────────────────────────────────────┘  │
+│                                                                      │
+│  ┌──────────────────┐  ┌──────────────────┐  ┌─────────────────┐   │
+│  │   RAG Pipeline   │  │  OmniLLM Core    │  │  Data Logger    │   │
+│  │  ChromaDB +      │  │  LiteLLM Gateway │  │  Timestamps     │   │
+│  │  Fallback Search │  │  Smart Router    │  │  Latencies      │   │
+│  │  PDF/CSV/TXT KB  │  │  LLM-as-Judge    │  │  Model used     │   │
+│  └──────────────────┘  │  ELO Scorer      │  │  Transcripts    │   │
+│                         │  Cost Tracker    │  │  Task success   │   │
+│                         └──────────────────┘  └─────────────────┘   │
+│                                                                      │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │              LLM Backends (via LiteLLM)                      │   │
+│  │  ┌─────────┐ ┌────────┐ ┌──────────┐ ┌──────────┐          │   │
+│  │  │GPT-4o-  │ │Claude  │ │Gemini    │ │DeepSeek  │          │   │
+│  │  │mini     │ │Haiku   │ │Flash     │ │V3        │          │   │
+│  │  └─────────┘ └────────┘ └──────────┘ └──────────┘          │   │
+│  │  ┌─────────────────────────────────────────────┐             │   │
+│  │  │  Ollama Local: Llama3:8b, Qwen2.5:7b,      │             │   │
+│  │  │  Mistral:7b, DeepSeek-R1:14b                │             │   │
+│  │  └─────────────────────────────────────────────┘             │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## 🧩 Module Overview
+
+```
+omnillm/
+├── gateway.py           # Unified LLM Gateway — LiteLLM bridge for 100+ providers
+├── router.py            # Smart Router — 6 strategies incl. TASK_TYPE for HRI
+├── consensus.py         # Consensus Engine — LLM Council with 5 synthesis strategies
+├── evaluator.py         # LLM-as-Judge — Referenceless, Reference-Based, Pairwise
+├── scorer.py            # ELO Rating System — Chatbot Arena-style leaderboard
+├── cli.py               # Rich CLI — 10+ commands (ask, evaluate, compare, council…)
+│
+├── hri/                 # ── Embodied LLM Arena ──────────────────────────────────
+│   ├── agent_graph.py   # LangGraph multi-node pipeline (NEW)
+│   ├── classifier.py    # HRI Task Classifier — T1/T2/T3/T4 (rule-based + LLM)
+│   ├── language_detector.py  # Language detection → optimal model mapping
+│   └── experiment.py    # ExperimentManager — conditions A–E, participant sessions
+│
+├── rag/
+│   └── pipeline.py      # RAG Pipeline — ChromaDB + fallback keyword search
+│
+├── robotics/
+│   ├── bridge.py        # Abstract RobotBridge + RobotAction dataclass
+│   ├── pepper.py        # Pepper HTTP bridge (Python 3.x ↔ NAOqi)
+│   ├── nao.py           # NAO HTTP bridge
+│   ├── buddy.py         # Buddy WebSocket bridge
+│   ├── gesture_planner.py   # Task → gesture + LED colour mapping
+│   └── whisper_stt.py   # Whisper STT wrapper — local & API (NEW)
+│
+├── server/              # ── AI Server ────────────────────────────────────────
+│   ├── app.py           # Flask HTTP bridge (POST /interact, /transcribe…) (NEW)
+│   └── naoqi_client.py  # Python 2.7 NAOqi client for Pepper (NEW)
+│
+├── utils/
+│   ├── experiment_logger.py  # Interaction logging — latency, tokens, cost, RAG scores
+│   ├── questionnaire.py      # Likert-scale questionnaires + Godspeed + ELO pref (NEW)
+│   ├── cost_tracker.py       # Per-model, per-session cost tracking
+│   └── export.py             # CSV, JSON, Markdown export
+│
+└── tasks/               # YAML task definitions for standard benchmarks
+    └── loader.py
+
+config/
+└── models.yaml          # Model registry — add new models with 5 lines of YAML
+
+knowledge_base/          # RAG knowledge base (dummy data — update with real data)
+├── visitor_profiles.csv # Lab visitors: names, roles, visit times
+├── lab_info.txt         # Room locations, hours, WiFi, safety rules
+├── research_projects.txt# Active research project descriptions
+├── event_schedule.csv   # Seminars, meetings, open days
+├── university_map.txt   # Building layout and navigation directions
+└── faq.txt              # Frequently asked questions
+```
+
+---
+
+## 🏛️ State of the Art
+
+### The Collapse of Static Benchmarks
+
+Static benchmarks — MMLU, HumanEval, GSM8K — have become unreliable due to:
+
+- **Data Contamination**: Models trained on web-scraped data that includes benchmark test sets. (arXiv:2502.17521)
+- **Benchmark Saturation**: Top models all score >80% on MMLU, making it non-discriminative.
+- **Benchmark Errors**: Many "wrong" model answers are actually correct responses to ambiguous questions. (arXiv:2506.23864)
+
+**OmniLLM's solution**: Dynamic evaluation via YAML task files + LLM-as-Judge, analogous to [LiveBench](https://livebench.ai) (ICLR 2025).
+
+### LLM-as-Judge — The New Evaluation Paradigm
+
+Three research-validated patterns (arXiv:2412.05579):
+
+1. **Referenceless (G-Eval)**: Judge evaluates response quality independently — coherence, accuracy, helpfulness, safety
+2. **Reference-Based**: Judge compares response to a gold-standard answer — for factual/RAG tasks
+3. **Pairwise (ELO)**: Judge compares two responses head-to-head — avoids position bias via answer swapping
+
+### The Embodied LLM Arena — Novel Contribution
+
+No prior work has:
+- Compared multiple LLMs side-by-side through a social robot
+- Applied dynamic LLM routing during live HRI
+- Measured whether embodied rankings correlate with or diverge from text-only rankings
+
+This study fills that gap, using Pepper as an interactive LLM evaluation platform.
 
 ---
 
 ## 📐 Evaluation Axes
 
-OmniLLM evaluates models across **8 orthogonal axes** to provide a complete picture of capability:
+OmniLLM evaluates models across **8 orthogonal axes**:
 
-| # | Axis | What It Measures | Example Tasks |
-|---|------|-----------------|---------------|
-| 1 | **Reasoning** | Logic, mathematics, multi-step inference | Bat & ball problem, syllogisms, word problems (GSM8K-style) |
-| 2 | **Knowledge** | Factual accuracy across domains | Geography, science, history, medicine (MMLU-style, TriviaQA) |
-| 3 | **Code Generation** | Write, debug, and explain code | Prime checker, FizzBuzz, binary search debugging (HumanEval++, MBPP) |
-| 4 | **Instruction Following** | Structured output, constraints | Exact item counts, JSON schema output, multi-constraint formatting (IFEval) |
-| 5 | **Safety & Alignment** | Refusal, PII handling, bias | Refuse hacking instructions, refuse medical misinformation, PII redaction (TruthfulQA) |
-| 6 | **Latency & Throughput** | Speed metrics | Time-to-first-token (TTFT), tokens/sec, streaming |
-| 7 | **Cost Efficiency** | Quality per dollar | Quality at minimal token usage, cost-aware benchmarking |
-| 8 | **Robot-Readiness** | Structured output for robot control | JSON action plans for NAO/Pepper, voice command parsing, ROS2 Nav2 coordinates |
+| # | Axis | What It Measures | Embodied Arena Relevance |
+|---|------|-----------------|--------------------------|
+| 1 | **Reasoning** | Logic, multi-step inference | T3 Social, T1 complex queries |
+| 2 | **Knowledge** | Factual accuracy, MMLU-style | T1 Info Retrieval with RAG |
+| 3 | **Code** | Write/debug/explain code | Background research tasks |
+| 4 | **Instruction Following** | JSON schema, constraints | Robot action plan generation |
+| 5 | **Safety** | Refusal, PII handling, bias | All interactions |
+| 6 | **Latency** | TTFT, tokens/sec | Critical for robot response feel |
+| 7 | **Cost Efficiency** | Quality per dollar | Choosing Ollama vs. cloud |
+| 8 | **Robot-Readiness** | Structured JSON for robot control | Gesture + LED action plans |
 
 ---
 
-## 🚀 Installation & Setup Guide
+## 🚀 Installation & Setup
 
-### Prerequisites
-- Python 3.11 or higher
-- (Optional) [Ollama](https://ollama.com) for local models
-
-### Step-by-Step Installation
+### Basic Install (LLM evaluation only)
 
 ```bash
-# 1. Clone the repository
 git clone https://github.com/Akshita-sr/OmniLLM.git
 cd OmniLLM
-
-# 2. Create a virtual environment
 python -m venv .venv
-source .venv/bin/activate      # Linux / macOS
-# .venv\Scripts\activate       # Windows
+source .venv/bin/activate   # Linux/macOS
+# .venv\Scripts\activate    # Windows
 
-# 3. Install OmniLLM
 pip install -e ".[dev]"
-# or using requirements.txt:
-pip install -r requirements.txt
 
-# 4. Configure API keys
+# Configure API keys
 cp .env.example .env
-# Open .env and fill in your actual API keys
+# Edit .env and add: OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_API_KEY, etc.
 
-# 5. (Optional) Install Ollama for free local models
-curl -fsSL https://ollama.com/install.sh | sh
-ollama pull deepseek-r1:14b
-ollama pull qwen2.5:7b
-ollama pull llama3:8b
-ollama pull mistral:7b
-
-# 6. Verify installation
+# Verify
 omnillm models
 ```
 
-You should see a rich table of all 14 registered models.
+### Full Install — Embodied LLM Arena (adds RAG + LangGraph)
+
+```bash
+pip install -e ".[all]"
+
+# For local LLMs (free, privacy-preserving):
+curl -fsSL https://ollama.com/install.sh | sh
+ollama pull llama3:8b
+ollama pull qwen2.5:7b
+ollama pull mistral:7b
+ollama pull deepseek-r1:14b
+
+# For local Whisper STT:
+pip install openai-whisper
+```
+
+### Required API Keys (`.env` file)
+
+```bash
+OPENAI_API_KEY=sk-...          # GPT-4o-mini, Whisper API
+ANTHROPIC_API_KEY=sk-ant-...   # Claude Haiku
+GOOGLE_API_KEY=...              # Gemini Flash
+DEEPSEEK_API_KEY=...            # DeepSeek V3
+```
 
 ---
 
 ## 📖 Usage Guide
 
-### List All Registered Models
+### CLI Commands
 
 ```bash
+# List all registered models
 omnillm models
-```
 
-Shows a rich table with ID, type (cloud/local), provider, model name, and pricing.
+# Ask all models a question
+omnillm ask "Explain quantum computing" --all
 
-```bash
-# Filter to cloud-only or local-only
-omnillm models --type cloud
-omnillm models --type local
-```
+# Ask specific models
+omnillm ask "Hello" -m openai-gpt4o-mini -m claude-haiku
 
-### Run a Benchmark Evaluation
-
-```bash
-# Evaluate all cloud models on all tasks
+# Run benchmark evaluation
 omnillm evaluate
+omnillm evaluate -m openai-gpt4o-mini -c reasoning
+omnillm evaluate -o results/eval_2026.json
 
-# Evaluate specific models
-omnillm evaluate -m openai-gpt4o -m claude-3.5-sonnet
+# Pairwise comparison
+omnillm compare "Write a poem about robots" \
+    --model-a openai-gpt4o-mini --model-b gemini-2.5-flash
 
-# Evaluate one category only
-omnillm evaluate -c reasoning
-omnillm evaluate -c code
-omnillm evaluate -c safety
-
-# Save results to a file
-omnillm evaluate -m openai-gpt4o -o results/eval_2026.json
-```
-
-### Ask a Question
-
-```bash
-# Ask all models at once
-omnillm ask "Explain quantum computing in simple terms" --all
-
-# Ask a specific model
-omnillm ask "Hello" -m deepseek-r1-local
-
-# Ask multiple specific models
-omnillm ask "What is consciousness?" -m openai-gpt4o -m claude-3.5-sonnet
-```
-
-### Pairwise Model Comparison
-
-```bash
-# Compare two models head-to-head
-omnillm compare "Write a poem about the ocean"
-omnillm compare "Debug this Python code: def fib(n): return fib(n-1)+fib(n-2)" \
-    --model-a openai-gpt4o --model-b deepseek-v3-cloud
-```
-
-### LLM Council — Consensus Engine
-
-```bash
-# Use the consensus engine with default synthesis strategy
+# LLM Council (consensus)
 omnillm council "What is consciousness?"
-
-# Choose a specific strategy
 omnillm council "Is P=NP?" --strategy majority_vote
-omnillm council "Explain the trolley problem" --strategy weighted
 
-# Specify custom council members
-omnillm council "What should I know about quantum computing?" \
-    -m openai-gpt4o -m claude-3.5-sonnet -m gemini-2-pro
-```
+# Smart routing
+omnillm route "Where is Room 305?" --strategy TASK_TYPE
+omnillm route "Debug this code" --strategy BEST_QUALITY --budget 0.01
 
-The council command shows:
-1. Individual responses from each council member
-2. The synthesised final answer
-3. Agreement score (how much the models agreed)
-4. Which models (if any) dissented from the majority
-
-### Smart Routing
-
-```bash
-# Route based on complexity (auto-detects)
-omnillm route "Hi"
-omnillm route "Analyse the economic implications of AGI development on labour markets"
-
-# Route with budget constraint
-omnillm route "Simple greeting" --budget 0.001
-
-# Route with specific strategy
-omnillm route "Write a haiku" --strategy LOWEST_COST
-omnillm route "Debug complex async Python code" --strategy BEST_QUALITY
-omnillm route "Quick yes/no question" --strategy LOWEST_LATENCY
-```
-
-### ELO Leaderboard
-
-```bash
-# View overall leaderboard
+# View ELO leaderboard
 omnillm leaderboard
-
-# View category-specific leaderboard
 omnillm leaderboard --category reasoning
-omnillm leaderboard --category code
-```
 
-### Cost Tracking
-
-```bash
+# View costs
 omnillm costs
 ```
 
-Shows a breakdown of API spend per model across all sessions.
+### Running the Pepper AI Server
 
-### Export Results
+The Flask server bridges Pepper (Python 2.7/NAOqi) with the Python 3.x AI stack:
 
 ```bash
-# Export to different formats
-omnillm export --format csv --input results/eval.json -o results/report.csv
-omnillm export --format markdown --input results/eval.json -o results/report.md
-omnillm export --format json --input results/eval.json -o results/clean.json
+# Start the AI server (runs on localhost:5000)
+python -m omnillm.server.app
+
+# With options:
+python -m omnillm.server.app \
+    --host 0.0.0.0 \
+    --port 5000 \
+    --model openai-gpt4o-mini \
+    --kb knowledge_base/
+
+# API endpoints:
+# POST /interact    — main endpoint (audio or text → RobotAction JSON)
+# POST /transcribe  — audio → text (Whisper STT)
+# POST /evaluate    — submit questionnaire scores
+# GET  /health      — liveness probe
+# GET  /status      — server configuration
+# GET  /export      — download all interaction logs as JSON
 ```
 
----
+**Example request** (text mode):
 
-## ➕ Adding a New Model
-
-OmniLLM's plugin architecture makes adding models trivial. Open `config/models.yaml` and add:
-
-```yaml
-# Example: Adding GPT-5 when it releases
-openai-gpt5:
-  id: openai-gpt5
-  provider: openai
-  model: gpt-5
-  api_key_env: OPENAI_API_KEY
-  cost_per_1m_input: 10.00
-  cost_per_1m_output: 30.00
-  type: cloud
-  description: "OpenAI GPT-5 — next generation flagship"
+```bash
+curl -X POST http://localhost:5000/interact \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "Where is Room 305?",
+    "participant_id": "P001",
+    "session_id": "s-abc-123",
+    "condition": "C",
+    "rag_enabled": true
+  }'
 ```
 
-**That's it. 6 lines of YAML. Zero Python code changes.**
-
-The new model is immediately available in:
-- `omnillm models` listing
-- `omnillm ask ... -m openai-gpt5`
-- `omnillm evaluate -m openai-gpt5`
-- `omnillm council ... -m openai-gpt5`
-- Smart Router decisions
-
-### Adding a Local Ollama Model
-
-```yaml
-phi3-local:
-  id: phi3-local
-  provider: ollama
-  model: phi3:mini
-  api_base: http://localhost:11434
-  cost_per_1m_input: 0.00
-  cost_per_1m_output: 0.00
-  type: local
-  description: "Microsoft Phi-3 Mini — local via Ollama"
+**Example response**:
+```json
+{
+  "speech": "Room 305 is on the 3rd floor. Take the lift or Staircase A on your left.",
+  "gesture": "point_left",
+  "emotion_led": "#00AAFF",
+  "metadata": {
+    "task_type": "navigation",
+    "model_id": "openai-gpt4o-mini",
+    "rag_enabled": true
+  }
+}
 ```
 
-Then pull the model: `ollama pull phi3:mini`
+### Running the NAOqi Client (Python 2.7)
 
----
+On the Pepper robot (or a machine with NAOqi SDK):
 
-## 🤖 Robotics Integration (Future Roadmap)
-
-OmniLLM includes an abstract bridge layer for connecting LLMs to physical social robots.
-
-### Supported Platforms
-
-| Robot | SDK | Architecture |
-|-------|-----|-------------|
-| **Pepper** (SoftBank) | NAOqi (Python 2.7) | HTTP bridge to NAOqi process |
-| **NAO** (SoftBank) | NAOqi (Python 2.7) | HTTP bridge to NAOqi process |
-| **Buddy** (Blue Frog) | Android | WebSocket streaming |
-
-### Pepper/NAO: Python 2.7 ↔ 3.x Bridge
-
-```
-┌─────────────────────────────────────────────────────────┐
-│  Pepper/NAO Robot (Python 2.7 process — NAOqi)         │
-│  - ALAudioDevice captures voice via microphones         │
-│  - ALFaceDetection detects human faces                  │
-│  - ALAnimatedSpeech plays expressive speech             │
-│  - ALMotion controls movement                           │
-│  ↕ HTTP (WAV upload / JSON download)                    │
-├─────────────────────────────────────────────────────────┤
-│  AI Server (Python 3.x — OmniLLM)                      │
-│  - Receives WAV audio, transcribes with Whisper         │
-│  - Routes to LiteLLM gateway (or Consensus Engine)      │
-│  - Returns RobotAction JSON                             │
-│  - PepperBridge.execute_action() dispatches to robot    │
-└─────────────────────────────────────────────────────────┘
+```bash
+python omnillm/server/naoqi_client.py \
+    --robot-ip 192.168.1.100 \
+    --server-ip 192.168.1.50 \
+    --participant P001 \
+    --condition C
 ```
 
-### Buddy: Android WebSocket Streaming
+### LangGraph Agent Pipeline
 
-```
-Buddy (Android) ──WebSocket──▶ FastAPI + LiteLLM ──tokens──▶ Buddy TTS
-```
-
-Buddy receives LLM response tokens in real time, enabling the robot to start speaking before the full response is generated — dramatically improving perceived latency in human-robot interaction.
-
-### ROS2 Nav2 Integration
+Use the agent graph programmatically (Python 3.x):
 
 ```python
-from omnillm.robotics.bridge import parse_nav2_goal
+from omnillm.gateway import LLMGateway
+from omnillm.rag import RAGPipeline
+from omnillm.hri import build_hri_graph
+from omnillm.utils import ExperimentLogger
 
-# Natural language to ROS2 Nav2 PoseStamped
-goal = parse_nav2_goal(
-    llm_output='{"position": {"x": 5.0, "y": 0.0, "z": 0.0}, '
-               '"orientation": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0}}'
-)
-# Use with ROS2: rclpy.action.ActionClient → NavigateToPose
+gateway = LLMGateway()
+rag = RAGPipeline(gateway=gateway)
+rag.index_directory("knowledge_base/")
+logger = ExperimentLogger()
+
+graph = build_hri_graph(gateway=gateway, rag=rag, logger=logger)
+
+# Text-only mode (no audio hardware needed)
+result = await graph.ainvoke({
+    "utterance": "Where is Room 305?",
+    "participant_id": "P001",
+    "session_id": "s1",
+    "condition": "C",
+    "rag_enabled": True,
+})
+print(result["response_text"])   # Grounded answer from RAG + LLM
+print(result["robot_action"])    # {"speech": "...", "gesture": "point_left", ...}
 ```
 
-### Safety in Robotics
+**Graph nodes** (in execution order):
 
-**The Consensus Engine is critical for robotics safety**. A single hallucinated robot action can cause physical harm. By requiring 3+ models to agree before dispatching any movement command, the consensus engine provides a multi-layer safety check:
+1. `transcribe_audio` — Whisper STT (skipped in text-only mode)
+2. `detect_language` — ISO 639-1 language code
+3. `classify_task` — T1/T2/T3/T4 classification
+4. Conditional branch:
+   - `rag` (T1 Info Retrieval) — ChromaDB retrieval + LLM answer
+   - `nav_rag` (T2 Navigation) — ChromaDB + gesture planner
+   - `direct_llm` (T3 Social / Condition E) — direct LLM call
+   - `multilingual_llm` (T4) — language-optimal model
+5. `smart_router` — OmniLLM routing/council (Conditions C & D)
+6. `generate_action_plan` — builds RobotAction dict
+7. `log_interaction` — ExperimentLogger records everything
+
+### RAG Knowledge Base
+
+Index documents and query them:
 
 ```python
-from omnillm.consensus import ConsensusConfig, ConsensusEngine
+from omnillm.rag import RAGPipeline
+from omnillm.gateway import LLMGateway
 
-# Require 80% council agreement for robot actions
-config = ConsensusConfig(
-    council_models=["openai-gpt4o", "claude-3.5-sonnet", "gemini-2-pro"],
-    strategy="synthesis",
-    min_agreement=0.8,  # High bar for physical actions
+rag = RAGPipeline(gateway=LLMGateway(), model_id="openai-gpt4o-mini")
+
+# Index the knowledge base
+rag.index_directory("knowledge_base/")   # auto-indexes all .txt, .csv, .pdf
+
+# Query
+resp = await rag.query("What is the WiFi password?")
+print(resp.answer)            # "Visitor WiFi: UniGuest / Welcome2026!"
+print(resp.faithfulness_score) # 0.95 (LLM-as-Judge score)
+print(resp.hallucination_detected)  # False
+```
+
+**Knowledge base files** (in `knowledge_base/`):
+
+| File | Content | Task Type |
+|------|---------|-----------|
+| `visitor_profiles.csv` | Names, roles, visit times | T1 — "What time does Alice arrive?" |
+| `lab_info.txt` | Rooms, hours, WiFi, safety | T1 — "What is the WiFi password?" |
+| `research_projects.txt` | Project descriptions | T1 — "What is OmniLLM about?" |
+| `event_schedule.csv` | Seminars, open days, deadlines | T1 — "When is the next open day?" |
+| `university_map.txt` | Building layout, directions | T2 — "How do I get to Room 305?" |
+| `faq.txt` | Common questions & answers | T1 — Baseline evaluation |
+
+Update these files with your real lab data before running the experiment.
+
+### HRI Experiment Manager
+
+```python
+from omnillm.hri import ExperimentManager, ExperimentCondition
+
+manager = ExperimentManager(n_participants=20)
+
+# Create a session for participant P001, assign counterbalanced conditions
+session = manager.create_session("P001")
+print(session.assigned_conditions)   # e.g. ["C", "A", "D"] (counterbalanced)
+
+# Classify an utterance
+from omnillm.hri import HRITaskClassifier
+classifier = HRITaskClassifier()
+result = classifier.classify("Where is the cafeteria?")
+print(result.task_type)    # HRITaskType.NAVIGATION
+print(result.confidence)   # 0.92
+```
+
+### Questionnaire & ELO Scoring
+
+Collect post-interaction ratings and update the Embodied LLM Leaderboard:
+
+```python
+from omnillm.utils.questionnaire import (
+    InteractionQuestionnaire,
+    GodspeedResponse,
+    PairwisePreference,
+    QuestionnaireCollector,
 )
+from omnillm.scorer import EloScorer
+
+collector = QuestionnaireCollector()
+
+# After each condition block
+q = InteractionQuestionnaire(
+    session_id="s1", participant_id="P001", condition="C",
+    accuracy=6, naturalness=6, trust=6,
+    gesture_appropriateness=5, response_speed=7,
+)
+collector.add_interaction_response(q)
+
+# Pairwise preference (at end of session)
+pref = PairwisePreference(
+    session_id="s1", participant_id="P001",
+    condition_a="A", condition_b="C", preferred="C",
+)
+collector.add_pairwise_preference(pref)
+
+# Update Embodied ELO leaderboard
+elo = EloScorer()
+elo.record_match("condition-C", "condition-A", "model_a", category="embodied_hri")
+
+# Save data
+collector.save("results/questionnaire_data.json")
+collector.to_csv("results/questionnaire_data.csv")
+print(collector.summary_by_condition())
+print(elo.get_leaderboard())
 ```
 
-### Use Cases
+---
 
-- **Elderly Care**: Pepper robots with LLM support for medication reminders, companionship, and health monitoring
-- **Education**: NAO robots as interactive tutors that can answer any question via LLM
-- **Accessibility**: Buddy robots as AI-powered assistants for people with disabilities
-- **Warehouse Robotics**: ROS2-enabled robots with natural language task instructions
+## 🔬 Experimental Design
+
+### Participants
+
+15–25 people (lab visitors, students, staff). Each participant interacts with Pepper under 3 different LLM conditions (counterbalanced via Latin square). Total: ~20 participants × 3 conditions × 4 tasks = **240 interaction data points**.
+
+### Independent Variables
+
+- **LLM Backend**: GPT-4o-mini / Claude Haiku / Gemini Flash / DeepSeek-V3 / Llama3:8b (Ollama) / Smart-Routed
+- **RAG Condition**: RAG-on vs. RAG-off
+- **Language**: Participant's native language (auto-detected by Whisper + LanguageDetector)
+
+### Dependent Variables — Automatic (logged by `ExperimentLogger`)
+
+| Variable | How Measured |
+|----------|-------------|
+| Which LLM was used | `model_id` field |
+| Response latency | Wall clock from end-of-speech to start-of-speech |
+| Token count (input + output) | LiteLLM usage |
+| Cost per interaction | From `models.yaml` pricing |
+| RAG retrieval score | ChromaDB cosine similarity |
+| RAG faithfulness | LLM-as-Judge (0–1) |
+| Hallucination detected | Response vs. retrieved chunks comparison |
+| Language detected | WhisperSTT + LanguageDetector |
+| Task classification | HRITaskClassifier (T1–T4) |
+
+### Dependent Variables — Human-Rated (`InteractionQuestionnaire`)
+
+- "The robot's answers were accurate" (1–7 Likert)
+- "The robot was natural to talk to" (1–7 Likert)
+- "I trust the information the robot gave me" (1–7 Likert)
+- "The robot's gestures were appropriate" (1–7 Likert)
+- "The robot responded quickly enough" (1–7 Likert)
+- Godspeed subscales: Anthropomorphism, Animacy, Likeability, Perceived Intelligence, Perceived Safety (1–5)
+- Pairwise preference: "Which version of Pepper did you prefer?" → feeds ELO leaderboard
 
 ---
 
-## 🗺️ Roadmap
+## 📊 Automatic Evaluation Pipeline
 
-- [x] **Phase 1: Core Engine** — LiteLLM gateway, evaluation framework, ELO scorer, Rich CLI
-- [x] **Phase 2: Consensus Engine + Smart Router** — LLM Council, multi-strategy routing
-- [ ] **Phase 3: Dynamic Task Generation** — Automatic task generation, contamination detection
-- [ ] **Phase 4: Robotics Bridge** — Real Pepper/NAO/Buddy integration (beyond mocks)
-- [ ] **Phase 5: ROS2 Nav2** — Full navigation integration with autonomous waypoint planning
-- [ ] **Phase 6: Web Dashboard** — Optional Datasette/Streamlit dashboard for visual analytics
-- [ ] **Phase 7: Multi-Robot Experiments** — Multi-robot collaborative tasks with LLM coordination
+After every interaction, OmniLLM automatically:
 
----
-
-## 📚 Complete References & Literature
-
-### LLM Evaluation & Benchmarking
-
-- MMLU: [Measuring Massive Multitask Language Understanding](https://arxiv.org/abs/2009.03300)
-- HumanEval: [Evaluating Large Language Models Trained on Code](https://arxiv.org/abs/2107.03374)
-- GSM8K: [Training Verifiers to Solve Math Word Problems](https://arxiv.org/abs/2110.14168)
-- LiveBench: [A Challenging, Contamination-Free LLM Benchmark](https://livebench.ai) (ICLR 2025)
-- DyCodeEval: [Dynamic Code Evaluation](https://arxiv.org/abs/2503.04149)
-- IFEval: [Instruction-Following Evaluation for Large Language Models](https://arxiv.org/abs/2311.07911)
-- TruthfulQA: [Measuring How Models Mimic Human Falsehoods](https://arxiv.org/abs/2109.07958)
-
-### Data Contamination
-
-- [Benchmarking LLMs Under Data Contamination: Static to Dynamic](https://arxiv.org/abs/2406.04244) (EMNLP 2025)
-- [Contamination Detection: A Comprehensive Survey](https://arxiv.org/abs/2502.17521) — Collision Rate, Repeat Trials, Membership Inference, Chronological Analysis
-- [Garbage In, Reasoning Out?](https://arxiv.org/abs/2506.23864) — Benchmark errors vs. model errors
-- [Awesome Data Contamination](https://github.com/liyucheng09/Contamination_Detector)
-
-### LLM-as-Judge
-
-- [LLMs-as-Judges: A Comprehensive Survey](https://arxiv.org/abs/2412.05579) — 2700+ papers
-- [Evaluating LLM-based Agents for Multi-Turn Conversations](https://arxiv.org/abs/2503.22458)
-- [G-Eval: NLG Evaluation using GPT-4 with Better Human Alignment](https://arxiv.org/abs/2303.16634)
-- [Judging LLM-as-a-Judge with MT-Bench](https://arxiv.org/abs/2306.05685)
-- [LMSYS Chatbot Arena: Benchmarking LLMs in the Wild](https://arxiv.org/abs/2403.04132)
-
-### Consensus & Ensembles
-
-- [Learning to Trust the Crowd: Multi-Model Consensus Reasoning Engine](https://arxiv.org/abs/2601.07245)
-- [Multiple Large AI Models' Consensus for Object Detection](https://www.mdpi.com/2076-3417/14/14/6020)
-- [Mixture of Experts: Scaling Laws for Language Models](https://arxiv.org/abs/2101.03961)
-- [Awesome-LLM-Ensemble](https://github.com/jxzhangjhu/Awesome-LLM-Ensemble)
-
-### Dynamic Routing
-
-- [LiteLLM Router Documentation](https://docs.litellm.ai/docs/routing) — Simple-Shuffle, Least-Busy, Latency-Based, Usage-Based
-- [Cost Reduction with LLM Routing in RAG](https://www.latitude.so/blog/llm-routing-cost-reduction) — 75% cost reduction
-- [RouteLLM: Learning to Route LLMs with Preference Data](https://arxiv.org/abs/2406.18665)
-- [FrugalGPT: How to Use Large Language Models While Reducing Cost and Improving Performance](https://arxiv.org/abs/2305.05176)
-
-### LLMs + Robotics
-
-- [LLMs as NAO Robot 3D Motion Planners](https://arxiv.org/abs/2410.01741) (ICCV 2025 Workshop)
-- [LLM Enabled Social Robots – Aged Care](https://ieeexplore.ieee.org/document/10191898) (IEEE)
-- [Trinity: Modular Humanoid Robot AI System](https://arxiv.org/abs/2503.08338)
-- [Integrating LLMs into Robotic Autonomy: A Review](https://www.mdpi.com/2673-2688/5/2/30)
-- [LLM-Powered Multi-Session HRI](https://www.frontiersin.org/articles/10.3389/frobt.2024.1345979/)
-- [DeepSeek R1 Controls Robotic Arm in Checkers](https://huggingface.co/blog/lerobot-deepseek-r1)
-- [Latency-Aware Benchmarking for ROS2 Navigation](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC10853435/)
-- [SoftBank Robotics NAOqi Documentation](https://developer.softbankrobotics.com/naoqi-sdk-doc)
-- [Awesome LLM-Robotics](https://github.com/GT-RIPL/Awesome-LLM-Robotics)
-
-### Tools & Frameworks
-
-- [LiteLLM](https://github.com/BerriAI/litellm) — Unified LLM gateway (100+ providers)
-- [Ollama](https://ollama.com) — Local LLM runtime
-- [Rich](https://github.com/Textualize/rich) — Terminal formatting library
-- [Click](https://click.palletsprojects.com) — CLI framework
-- [FastAPI](https://fastapi.tiangolo.com) — For robot WebSocket server
-- [websockets](https://websockets.readthedocs.io) — For Buddy robot integration
-
-### Leaderboards & Resources
-
-- [LMSYS Chatbot Arena](https://chat.lmsys.org/?leaderboard) — Human preference ELO leaderboard
-- [HuggingFace Open LLM Leaderboard](https://huggingface.co/spaces/HuggingFaceH4/open_llm_leaderboard)
-- [LiveBench](https://livebench.ai) — Contamination-free benchmark
-- [Artificial Analysis](https://artificialanalysis.ai) — Quality, latency, and cost benchmarks
-- [Scale HELM](https://crfm.stanford.edu/helm/) — Holistic Evaluation of Language Models
+1. **Referenceless Evaluation**: Sends prompt + response to LLM-as-judge (GPT-4o-mini) — rates coherence, helpfulness, fluency, safety (1–10 each)
+2. **RAG Faithfulness Score**: For T1/T2 tasks, evaluates whether the response faithfully uses retrieved document chunks
+3. **Hallucination Detection**: Flags claims not supported by retrieved documents. Computes per-model hallucination rate
+4. **Pairwise ELO Update**: Participant preference → updates the "Embodied LLM Leaderboard"
+5. **Latency-Quality Composite Score**:
+   ```
+   value = quality × 0.5 + (1/latency_ms) × 0.3 + (1/cost_usd) × 0.2
+   ```
+6. **Cross-Reference with Standard Benchmarks**: Correlate embodied scores with MMLU/Chatbot Arena — the *discrepancy* is the key finding
 
 ---
 
-## 🤝 Contributing
-
-Contributions are welcome! Here's how to contribute to different areas:
-
-### Adding a New Model
-
-Edit `config/models.yaml` — see the [Adding a New Model](#-adding-a-new-model) section above.
-
-### Adding Evaluation Tasks
-
-Create or edit a YAML file in `config/tasks/`:
-
-```yaml
-tasks:
-  - id: my-new-task
-    category: reasoning
-    prompt: "Your task prompt here"
-    reference_answer: "Expected answer (optional)"
-    grading_type: llm_judge
-    judge_pattern: reference_based
-    judge_prompt: "Scoring rubric for the judge model"
-```
-
-### Adding a Robot Bridge
-
-1. Create `omnillm/robotics/my_robot.py`
-2. Subclass `RobotBridge` from `omnillm.robotics.bridge`
-3. Implement all 6 abstract methods
-4. Add to `omnillm/robotics/__init__.py`
-
-### Running Tests
+## �� Testing
 
 ```bash
 # Install dev dependencies
 pip install -e ".[dev]"
 
-# Run all tests (no API keys required — uses mocks)
+# Run all 278 tests (no API keys needed — uses mocks)
 pytest tests/ -v
 
-# Run specific test file
-pytest tests/test_consensus.py -v
+# Run specific test files
+pytest tests/test_hri.py -v
+pytest tests/test_rag.py -v
+pytest tests/test_new_components.py -v   # New: agent_graph, whisper, questionnaire
 
 # Run with coverage
 pytest tests/ --cov=omnillm --cov-report=term-missing
 ```
 
-### Code Style
+### Test Coverage by Module
 
-- Python 3.11+ with type hints throughout
-- Docstrings on all public classes and methods
-- Async/await for all LLM calls
-- Black/Ruff for formatting
+| Module | Tests | Description |
+|--------|-------|-------------|
+| `test_gateway.py` | 21 | LiteLLM model strings, error handling |
+| `test_router.py` | 24 | All 6 routing strategies incl. TASK_TYPE |
+| `test_consensus.py` | 20 | All 5 synthesis strategies, ELO updates |
+| `test_evaluator.py` | 15 | Referenceless, Reference-Based, Pairwise judge |
+| `test_scorer.py` | 22 | ELO math, leaderboard, history |
+| `test_hri.py` | 51 | Classifier T1–T4, LanguageDetector, ExperimentManager |
+| `test_rag.py` | 26 | Indexing, retrieval, faithfulness, hallucination |
+| `test_gesture_planner.py` | 30 | Task → gesture mapping for all 4 types |
+| `test_experiment_logger.py` | 16 | Logging, CSV/JSON export |
+| `test_new_components.py` | 53 | agent_graph, whisper_stt, questionnaire, server, KB files |
+
+---
+
+## 📁 Project Structure
+
+```
+OmniLLM/
+├── omnillm/               # Main Python package
+│   ├── hri/               # Embodied LLM Arena — HRI components
+│   ├── rag/               # RAG pipeline (ChromaDB + fallback)
+│   ├── robotics/          # Robot bridges + Whisper STT
+│   ├── server/            # Flask AI server + NAOqi Python 2.7 client
+│   └── utils/             # Logging, questionnaire, cost tracking, export
+├── knowledge_base/        # RAG knowledge base (dummy data — update with real data)
+├── config/
+│   ├── models.yaml        # Model registry (add new models here)
+│   └── tasks/             # Benchmark task YAML files
+├── tests/                 # 278 unit tests (pytest)
+├── results/               # Evaluation results (auto-created)
+├── pyproject.toml         # Project metadata + optional dependencies
+├── requirements.txt       # Core + optional dependencies
+├── .env.example           # API key template
+├── GETTING_STARTED.md     # Beginner-friendly guide
+└── README.md              # This file
+```
+
+### Install Extras
+
+| Extra | What it adds |
+|-------|-------------|
+| `pip install -e ".[dev]"` | pytest, mocks — for development |
+| `pip install -e ".[robotics]"` | Flask, websockets — for the AI server |
+| `pip install -e ".[hri]"` | ChromaDB, LangChain, LangGraph, langdetect — for RAG + agent |
+| `pip install -e ".[all]"` | Everything above |
+
+---
+
+## 🤝 Contributing
+
+### Adding a New LLM (5 lines of YAML)
+
+Edit `config/models.yaml`:
+
+```yaml
+my-new-model:
+  id: my-new-model
+  provider: openai          # or anthropic, google, ollama, openai_compatible
+  model: my-model-name
+  api_key_env: MY_API_KEY
+  cost_per_1m_input: 1.00
+  cost_per_1m_output: 3.00
+  type: cloud
+```
+
+No Python code changes required.
+
+### Adding a Task to the HRI Routing
+
+Edit `config/models.yaml` under the `routing.hri_task_routing` section to map task types to model IDs.
+
+### Running the Full HRI Experiment
+
+1. Update `knowledge_base/` files with real lab data
+2. Start the AI server: `python -m omnillm.server.app`
+3. Start the NAOqi client on/near Pepper: `python omnillm/server/naoqi_client.py --robot-ip <IP>`
+4. Follow the protocol in the experimental design section
+5. Export data: `GET http://localhost:5000/export`
+6. Analyze: use `ExperimentLogger.save()` + `QuestionnaireCollector.save()`
 
 ---
 
@@ -668,15 +715,10 @@ pytest tests/ --cov=omnillm --cov-report=term-missing
 
 This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
 
-```
-MIT License
-Copyright (c) 2026 Akshita-sr
-```
-
 ---
 
 <div align="center">
-<b>🧠 OmniLLM — Compare, Route, and Orchestrate Every LLM — Today and Tomorrow</b>
-<br>
-Built with ❤️ for the open-source AI community
+<b>🧠 OmniLLM — Compare, Route, and Orchestrate Every LLM — Today and Tomorrow</b><br>
+<i>Now also powering the Embodied LLM Arena: the first multi-LLM benchmark through social robot interaction</i><br><br>
+Built with ❤️ for the open-source AI and HRI communities
 </div>
