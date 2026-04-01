@@ -2,6 +2,8 @@
 
 This guide explains OmniLLM **from scratch** — no prior knowledge of LLMs, Python packaging, or AI tooling assumed. By the end you will know what the project does, how its code is organised, which technologies power it, and exactly how to run it.
 
+> 📖 **Want even more depth?** See [EXPLANATION.md](EXPLANATION.md) — a comprehensive walkthrough of every single file, every terminal command, all tools and libraries, and a complete guide to connecting OmniLLM to an old Pepper robot that uses NAOqi, Choregraphe, and Python 2.7.
+
 ---
 
 ## Table of Contents
@@ -15,7 +17,8 @@ This guide explains OmniLLM **from scratch** — no prior knowledge of LLMs, Pyt
 7. [Step-by-Step Installation](#7-step-by-step-installation)
 8. [Running the Project](#8-running-the-project)
 9. [Running the Tests](#9-running-the-tests)
-10. [Common Troubleshooting](#10-common-troubleshooting)
+10. [Pepper Robot + NAOqi + Choregraphe Quick-Start](#10-pepper-robot--naoqi--choregraphe-quick-start)
+11. [Common Troubleshooting](#11-common-troubleshooting)
 
 ---
 
@@ -36,7 +39,7 @@ This guide explains OmniLLM **from scratch** — no prior knowledge of LLMs, Pyt
 
 | Feature | What it does |
 |---|---|
-| **Unified Gateway** | One function call reaches any of 14+ models from 6+ providers |
+| **Unified Gateway** | One function call reaches any of 19 models from 6+ providers |
 | **Smart Router** | Automatically picks the right model for each task and budget |
 | **Evaluation Engine** | Scores model responses using an AI judge (LLM-as-Judge) |
 | **Consensus Engine** | Asks several models the same question and merges their answers |
@@ -45,7 +48,7 @@ This guide explains OmniLLM **from scratch** — no prior knowledge of LLMs, Pyt
 | **Robotics Bridge** | Sends LLM output as commands to Pepper, NAO, and Buddy robots |
 | **CLI Dashboard** | Rich, coloured terminal interface — no GUI required |
 
-The entire model registry is **YAML-based**: adding a brand-new LLM requires only 6 lines of YAML and zero Python changes.
+The entire model registry is **YAML-based**: adding a brand-new LLM requires only 7–8 lines of YAML and zero Python changes.
 
 ---
 
@@ -198,7 +201,7 @@ models.yaml  →  LLMGateway._load_config()
                 LLMGateway.query()  →  litellm.acompletion()  →  ModelResponse
 ```
 
-- **`_build_model_string(model_id)`** converts the YAML model ID (e.g., `deepseek-r1-local`) into the prefix format LiteLLM expects (e.g., `ollama/deepseek-r1:14b`).
+- **`_build_model_string(model_id)`** converts the YAML model ID (e.g., `llama3-8b-local`) into the prefix format LiteLLM expects (e.g., `ollama/llama3:8b`).
 - **`query(model_id, messages)`** is `async`: it sends the messages and returns a `ModelResponse` dataclass containing `content`, `input_tokens`, `output_tokens`, `latency_ms`, `cost_usd`, and any `error`.
 - **`query_multiple(model_ids, messages)`** fires all queries **concurrently** with `asyncio.gather`, so querying 5 models takes roughly the same time as querying 1.
 
@@ -487,7 +490,7 @@ DEEPSEEK_API_KEY=...             # https://platform.deepseek.com/
 omnillm models
 ```
 
-You should see a coloured table listing all 14 registered models. If you see this, OmniLLM is installed correctly.
+You should see a coloured table listing all 19 registered models. If you see this, OmniLLM is installed correctly.
 
 ---
 
@@ -510,8 +513,9 @@ curl -fsSL https://ollama.com/install.sh | sh
 
 ```bash
 ollama pull llama3:8b        # Meta Llama 3 — general purpose (~4.7 GB)
-ollama pull deepseek-r1:14b  # DeepSeek R1 — strong reasoning (~8 GB)
 ollama pull qwen2.5:7b       # Alibaba Qwen — multilingual (~4.4 GB)
+ollama pull qwen2.5:3b       # Qwen 2.5 compact — lighter and faster (~2.0 GB)
+ollama pull llama3.2:3b      # Meta Llama 3.2 compact (~2.0 GB)
 ```
 
 **Verify Ollama is running** (it starts automatically after install):
@@ -523,7 +527,7 @@ ollama list   # shows all downloaded models
 **Ask a question**:
 
 ```bash
-omnillm ask "Explain quantum entanglement simply" -m deepseek-r1-local
+omnillm ask "Explain quantum entanglement simply" -m llama3-8b-local
 ```
 
 ### 8.2 Option B — Run with Cloud Models (API Key Required)
@@ -555,7 +559,7 @@ omnillm models --type local # local (Ollama) only
 
 ```bash
 # Ask a specific model
-omnillm ask "Hello" -m deepseek-r1-local
+omnillm ask "Hello" -m llama3-8b-local
 
 # Ask multiple models
 omnillm ask "Explain RAG" -m openai-gpt4o -m claude-sonnet
@@ -599,7 +603,7 @@ omnillm council "Is P=NP?" --strategy majority_vote
 
 # Custom council members
 omnillm council "Analyse climate change solutions" \
-    -m openai-gpt4o -m claude-sonnet -m gemini-2-pro
+    -m openai-gpt4o -m claude-sonnet -m gemini-2.5-pro
 ```
 
 The council output shows each model's individual response, the synthesised final answer, and an agreement score.
@@ -684,7 +688,105 @@ A green `PASSED` next to every test name means everything is working correctly.
 
 ---
 
-## 10. Common Troubleshooting
+## 10. Pepper Robot + NAOqi + Choregraphe Quick-Start
+
+> For a full step-by-step guide with detailed troubleshooting, see **[EXPLANATION.md — Section 9](EXPLANATION.md#9-connecting-to-the-old-pepper-robot-naoqi--choregraphe--python-27)**.
+
+### Why Two Processes?
+
+Pepper's NAOqi SDK is locked to **Python 2.7**. OmniLLM's AI stack needs **Python 3.11+**. OmniLLM solves this with two separate processes that communicate over HTTP:
+
+```
+Your Computer (Python 3.11+)          Pepper Robot (Python 2.7 / NAOqi)
+┌──────────────────────────┐           ┌──────────────────────────────┐
+│  python -m omnillm.      │◄──────────│  python naoqi_client.py      │
+│  server.app              │  HTTP     │  (captures audio, executes   │
+│  AI server, LangGraph,   │──────────►│  speech + gesture + LED)     │
+│  RAG, LiteLLM, Whisper   │           └──────────────────────────────┘
+└──────────────────────────┘
+```
+
+### Quick Setup (5 Steps)
+
+**Step 1 — Find Pepper's IP**
+
+Press Pepper's chest button once — it says its IP address aloud (e.g., `192.168.1.100`).
+
+**Step 2 — Start the AI server** (on your Python 3.11+ machine)
+
+```bash
+source .venv/bin/activate
+pip install -e ".[all]"
+pip install openai-whisper         # for local speech-to-text
+
+python -m omnillm.server.app --host 0.0.0.0 --port 5000
+```
+
+Test it:
+```bash
+curl http://localhost:5000/health   # should return {"status": "ok"}
+```
+
+**Step 3 — Find your machine's IP**
+
+```bash
+ip addr show   # Linux/macOS — look for your 192.168.x.x address
+ipconfig       # Windows
+```
+
+**Step 4 — Run the NAOqi client** (in Python 2.7, with NAOqi SDK installed)
+
+```bash
+# Replace 192.168.1.100 with Pepper's IP, 192.168.1.50 with your machine's IP
+python omnillm/server/naoqi_client.py \
+    --robot-ip 192.168.1.100 \
+    --server-ip 192.168.1.50 \
+    --participant P001 \
+    --condition C
+```
+
+Pepper will say: *"Hello! I am Pepper, powered by OmniLLM. How can I help you today?"*
+
+**Step 5 — Speak to Pepper**
+
+Talk within ~1 metre of Pepper's microphone. OmniLLM will:
+1. Capture 5 seconds of audio
+2. Transcribe with Whisper STT
+3. Classify the question type (T1–T4)
+4. Get an AI response via LangGraph + LiteLLM
+5. Return gesture + speech + LED colour to Pepper
+
+### Using Choregraphe Alongside OmniLLM
+
+| Choregraphe | OmniLLM |
+|---|---|
+| Install / test individual robot behaviors | Decide *which* behavior to trigger based on AI reasoning |
+| Test ALAnimatedSpeech, ALMotion in isolation | Drive speech + motion from LLM output |
+| Good for scripted interactions | Good for open-ended conversations |
+
+To add a Choregraphe-created behavior to OmniLLM's gesture planner, add it to `GESTURE_TO_BEHAVIOR` in `omnillm/server/naoqi_client.py`:
+
+```python
+GESTURE_TO_BEHAVIOR = {
+    "wave": "animations/Stand/Gestures/Hey_1",
+    "my_custom_welcome": "myBehaviors/WelcomeDance",  # ← your behavior
+    # ...
+}
+```
+
+### Experimental Conditions
+
+| Flag | What Pepper Uses |
+|---|---|
+| `--condition A` | GPT-4o-mini (cloud baseline) |
+| `--condition B` | Llama3:8b via Ollama (free local baseline) |
+| `--condition C` | OmniLLM smart router (best model per task type) |
+| `--condition D` | LLM Council (3 models → synthesised answer) |
+| `--condition E` | GPT-4o-mini without RAG (isolates RAG benefit) |
+
+---
+
+## 11. Common Troubleshooting
 
 ### `omnillm: command not found`
 
@@ -751,18 +853,22 @@ cp .env.example .env   # then add your API keys
 
 # Local free models (no API key needed)
 ollama pull llama3:8b
-omnillm ask "Hello" -m llama3-local
+omnillm ask "Hello" -m llama3-8b-local
 
 # Cloud models (API key required)
 omnillm ask "Hello" -m openai-gpt4o
 
 # Core features
-omnillm models                            # list all models
+omnillm models                            # list all 19 models
 omnillm evaluate -m openai-gpt4o          # evaluate a model
 omnillm council "Your question"           # multi-model consensus
 omnillm route "Your prompt"               # smart routing demo
 omnillm leaderboard                       # ELO rankings
 omnillm costs                             # spend tracking
+
+# Pepper robot integration
+python -m omnillm.server.app --host 0.0.0.0 --port 5000   # start AI server
+python omnillm/server/naoqi_client.py --robot-ip <IP>     # run NAOqi client (Python 2.7)
 
 # Tests (no API key needed)
 pytest tests/ -v
@@ -770,4 +876,5 @@ pytest tests/ -v
 
 ---
 
-*For full documentation, academic references, architecture diagrams, and the complete roadmap, see [README.md](README.md).*
+*For full documentation, academic references, architecture diagrams, and the complete roadmap, see [README.md](README.md).*  
+*For a complete explanation of every file, every command, and how to connect Pepper, see [EXPLANATION.md](EXPLANATION.md).*
