@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/pynaoqi/**)",
+      "Read(//c/pynaoqi/pynaoqi-python2.7-2.5.5.5-win32-vs2013/**)",
+      "Read(//c/Python27/**)",
+      "Bash(\"C:/Python27/python.exe\" --version)",
+      "Read(//c/Users/akshi/OneDone/Desktop/**)",
+      "WebSearch"
+    ]
+  }
+}
