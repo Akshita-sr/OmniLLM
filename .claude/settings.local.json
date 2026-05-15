@@ -6,7 +6,11 @@
       "Read(//c/Python27/**)",
       "Bash(\"C:/Python27/python.exe\" --version)",
       "Read(//c/Users/akshi/OneDone/Desktop/**)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(ls venv/Scripts/python.exe)",
+      "Bash(ls .venv/Scripts/python.exe)",
+      "Bash(venv/Scripts/python.exe -m pip install --quiet markdown-pdf)",
+      "Bash(venv/Scripts/python.exe -c \"from markdown_pdf import MarkdownPdf, Section; print\\('markdown-pdf installed:', MarkdownPdf\\)\")"
     ]
   }
 }

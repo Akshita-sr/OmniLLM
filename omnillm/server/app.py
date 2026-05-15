@@ -245,7 +245,7 @@ def create_app(
 
         graph = _get_graph()
 
-        if graph is not None:
+        if graph is not None and rag is not None:
             # Full LangGraph pipeline
             state: dict[str, Any] = {
                 "utterance": utterance,
