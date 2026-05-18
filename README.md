@@ -46,7 +46,7 @@
 | **ELO Leaderboard** | Chatbot-Arena-style ratings, with per-category leaderboards. |
 | **RAG Pipeline** | ChromaDB-backed retrieval over your own documents (TXT, CSV, PDF), with optional faithfulness scoring. |
 | **LangGraph Agent Pipeline** | Whisper STT → language detect → task classify (T1-T4) → RAG / direct LLM → robot action plan. |
-| **Robotics Bridge** | Abstract `RobotBridge` with concrete bridges for Pepper, NAO, and Buddy. The robot's brain is never locked to a single model. |
+| **Robotics Bridge** | Abstract `RobotBridge` with a concrete bridge for Pepper. The robot's brain is never locked to a single model. |
 | **Plugin Architecture** | Adding a new LLM is 7 lines of YAML, zero Python changes. |
 
 ### Key Concepts in 60 Seconds
@@ -62,7 +62,7 @@
 | **RAG** | Retrieval-Augmented Generation — search docs then answer |
 | **Consensus** | Asking many models the same thing and merging |
 | **HRI** | Human-Robot Interaction (the research field) |
-| **NAOqi** | Pepper / NAO's middleware OS — locked to Python 2.7 |
+| **NAOqi** | Pepper's middleware OS — locked to Python 2.7 |
 
 ---
 
@@ -194,7 +194,7 @@ source .venv/bin/activate            # Linux / macOS
 # Install (editable, with dev/test deps)
 pip install -e ".[dev]"
 
-# Full install — RAG + LangGraph + Pepper server + Buddy
+# Full install — RAG + LangGraph + Pepper server
 pip install -e ".[all]"
 
 # API keys (optional — Ollama works without them)
@@ -210,7 +210,7 @@ omnillm models
 | Extra | What it adds |
 |-------|-------------|
 | `.[dev]` | pytest, pytest-asyncio, pytest-mock |
-| `.[robotics]` | Flask, websockets — for the AI server and Buddy bridge |
+| `.[robotics]` | Flask, websockets — for the AI server |
 | `.[hri]` | ChromaDB, LangChain, LangGraph, sentence-transformers, langdetect — for RAG + agent graph |
 | `.[all]` | Everything above |
 
@@ -260,8 +260,6 @@ omnillm/
 +- robotics/
 |   +- bridge.py        # Abstract RobotBridge + RobotAction
 |   +- pepper.py        # Pepper HTTP bridge
-|   +- nao.py           # NAO HTTP bridge
-|   +- buddy.py         # Buddy WebSocket bridge
 |   +- gesture_planner.py
 |   +- whisper_stt.py   # Whisper STT (local + API)
 |

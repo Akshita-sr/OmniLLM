@@ -16,12 +16,12 @@ The bridge pattern decouples the LLM layer from robot-specific SDKs:
     ┌──────────────────────────────────────────────────────────────────┐
     │                   RobotBridge (ABC)                              │
     │  parse_llm_to_action()  →  execute_action(RobotAction)          │
-    └─────────┬────────────────┬───────────────────┬───────────────────┘
-              │                │                   │
-    ┌─────────▼──────┐ ┌───────▼──────┐ ┌─────────▼──────┐
-    │  PepperBridge  │ │  NAOBridge   │ │  BuddyBridge   │
-    │  (NAOqi/HTTP)  │ │  (NAOqi/HTTP)│ │  (WebSocket)   │
-    └────────────────┘ └──────────────┘ └────────────────┘
+    └─────────┬─────────────────────────────────────────────────────────┘
+              │
+    ┌─────────▼──────┐
+    │  PepperBridge  │
+    │  (NAOqi/HTTP)  │
+    └────────────────┘
 
 Safety note
 -----------

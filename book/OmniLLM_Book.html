@@ -312,37 +312,6 @@ excerpts that are too important to paraphrase.</p>
 <li><strong>Appendix D</strong>  Troubleshooting Reference</li>
 <li><strong>Appendix E</strong>  External Resources — Papers, Libraries, Repositories</li>
 <li><strong>Appendix F</strong>  File Index — Every File in the Repository, One Line Each</li>
-<li><strong>Appendix G</strong>  End-to-End Flow Diagram — Spoken Question to Robot Action</li>
-</ul>
-<h2 id="part-ix-pepper-llm-integration-survey-chapters-4047">Part IX — Pepper-LLM Integration Survey (Chapters 40–47)</h2>
-<ul>
-<li><strong>Chapter 40</strong>  Pepper's Hardware and Software Platform</li>
-<li><strong>Chapter 41</strong>  NAOqi Framework, PyNAOqi, and Programmatic Connection</li>
-<li><strong>Chapter 42</strong>  The Eleven NAOqi Modules That Matter for LLM Integration</li>
-<li><strong>Chapter 43</strong>  Choregraphe as a Visual Programming IDE</li>
-<li><strong>Chapter 44</strong>  Programming Patterns: Audio, Tablet, Face Detection</li>
-<li><strong>Chapter 45</strong>  The Python 2.7 to 3.x Bridge — Five Patterns Reviewed</li>
-<li><strong>Chapter 46</strong>  Catalogue of Published Pepper-LLM Projects (2023–2026)</li>
-<li><strong>Chapter 47</strong>  Lessons Learned and Best Practices</li>
-</ul>
-<h2 id="part-x-thesis-design-reference-chapters-4855">Part X — Thesis Design Reference (Chapters 48–55)</h2>
-<ul>
-<li><strong>Chapter 48</strong>  Literature Landscape — What Exists, What's Missing</li>
-<li><strong>Chapter 49</strong>  The Critical Research Gap You Will Fill</li>
-<li><strong>Chapter 50</strong>  Three Hypotheses</li>
-<li><strong>Chapter 51</strong>  The Four Task Types in Full Detail</li>
-<li><strong>Chapter 52</strong>  The Five Experimental Conditions</li>
-<li><strong>Chapter 53</strong>  Automatic and Human-Rated Metrics</li>
-<li><strong>Chapter 54</strong>  One-Month Execution Plan</li>
-<li><strong>Chapter 55</strong>  Recommended Tools and the OpenClaw Question</li>
-</ul>
-<h2 id="part-xi-extended-beginner-material-chapters-5660">Part XI — Extended Beginner Material (Chapters 56–60)</h2>
-<ul>
-<li><strong>Chapter 56</strong>  "Reading the Code" — A Single Question's Journey, Line by Line</li>
-<li><strong>Chapter 57</strong>  AI-Stack and Frameworks — Expanded Glossary with Rationale</li>
-<li><strong>Chapter 58</strong>  Choregraphe-Only Walkthrough (No Robot Needed)</li>
-<li><strong>Chapter 59</strong>  A Complete First Experimental Session — Worked Example</li>
-<li><strong>Chapter 60</strong>  Future Scope and Improvement Opportunities</li>
 </ul>
 <div class='pageBreak'></div>
 
@@ -3432,7 +3401,7 @@ local and API backends.</p>
 
 <p>This is the <strong>boundary between brain and body</strong>. The brain produces a
 <code>RobotAction</code>. The body (one of the bridge implementations) executes it.</p>
-<h3 id="192-the-three-bridges">19.2  The Three Bridges</h3>
+<h3 id="192-the-pepper-bridge">19.2  The Pepper Bridge</h3>
 <table>
 <thead>
 <tr>
@@ -3449,24 +3418,14 @@ local and API backends.</p>
 <td>HTTP to NAOqi bridge server</td>
 <td>Yes (separate process)</td>
 </tr>
-<tr>
-<td><code>NAOBridge</code></td>
-<td>NAO</td>
-<td>HTTP to NAOqi bridge server</td>
-<td>Yes (separate process)</td>
-</tr>
-<tr>
-<td><code>BuddyBridge</code></td>
-<td>Buddy</td>
-<td>WebSocket</td>
-<td>No (Android)</td>
-</tr>
 </tbody>
 </table>
-<p>The Pepper / NAO bridges are nearly identical (different gesture and
-walk-API names). The Buddy bridge is genuinely different — it streams tokens
-in real time over WebSocket so the robot's TTS can start speaking before
-the LLM has finished generating.</p>
+<p>Earlier drafts of this codebase shipped two additional bridges
+(<code>NAOBridge</code> for the smaller NAO robot, <code>BuddyBridge</code> for the Android-
+based Buddy companion). They were removed to keep the surface area
+focused on the platform actually used in the experiments. The bridge
+interface (<code>omnillm/robotics/bridge.py</code>) is unchanged, so adding a new
+robot back later is a one-file exercise.</p>
 <h3 id="193-why-http-to-naoqi-not-direct">19.3  Why HTTP to NAOqi (Not Direct)?</h3>
 <p>You might think "the AI server could <code>import naoqi</code> and call NAOqi
 directly". This does not work because:</p>
@@ -8788,6 +8747,168 @@ pytest<span style="color: #BBB"> </span>tests/<span style="color: #BBB"> </span>
 </tr>
 </tbody>
 </table>
+<div class='pageBreak'></div>
+
+<h2 id="appendix-g-field-notes-bringing-omnillm-up-on-windows-11">Appendix G — Field Notes: Bringing OmniLLM up on Windows 11</h2>
+<p>This appendix captures the gotchas and fixes discovered while standing
+OmniLLM up end-to-end on a Windows 11 laptop talking to Choregraphe's
+virtual Pepper. None of this is exotic — but every one of these consumed
+hours the first time. They're written down so future-you doesn't lose the
+same hours.</p>
+<h3 id="g1-choregraphes-connect-to-dialog-gotcha">G.1  Choregraphe's "Connect to..." dialog gotcha</h3>
+<p>When you launch Choregraphe it auto-spawns a virtual Pepper in the
+background on a random port (e.g. 56471). The title bar may say
+<em>"Connected to a virtual robot"</em>, but <strong>external Python clients cannot
+talk to that auto-spawned instance</strong> — only Choregraphe itself can.</p>
+<p>To make the virtual robot reachable from your scripts:</p>
+<ol>
+<li>Top menu → <strong>Connection</strong> → <strong>Connect to...</strong></li>
+<li><strong>Untick</strong> both "Use fixed port" and "Use fixed IP/hostname".</li>
+<li>Click on the robot in the list (named after your user, e.g. <em>AKSHITA</em>).</li>
+<li>Click <strong>Select</strong>.</li>
+</ol>
+<p>After this the title bar says <em>"Connected to AKSHITA"</em> (or your user
+name). Only now can <code>omnillm</code>/<code>demo_pepper_omnillm.py</code>/etc. open a NAOqi
+session.</p>
+<p><strong>The port shown in the dialog changes every Choregraphe restart.</strong> Note
+it and pass it via <code>--robot-port</code>. The "Use fixed port" checkbox does
+<strong>not</strong> start a new server on the fixed port; it only changes the
+<em>target</em> of subsequent connection attempts.</p>
+<h3 id="g2-windows-11-tcp-loopback-bug-in-naoqi-25">G.2  Windows 11 TCP loopback bug in NAOqi 2.5</h3>
+<p>Symptom: After a successful TCP connect, the very first RPC call
+(<code>tts.say(...)</code>, even <code>tts.getLanguage()</code>) fails with:</p>
+<div class="codehilite" style="background: #f0f0f0"><pre style="line-height: 125%;"><span></span><code>RuntimeError: ALTextToSpeech::getLanguage  Socket is not connected
+</code></pre></div>
+
+<p>Diagnosis: Windows 11's TCP fast-path for <code>127.0.0.1</code> interacts badly
+with NAOqi 2.5's qimessaging reply socket. The connection appears
+established at the kernel level but the qi handshake silently drops.
+The same code against a <em>real</em> Pepper at a LAN IP (e.g. 192.168.x.x)
+works perfectly — the bug is specific to loopback on Win11.</p>
+<p>Workaround: use the older <code>naoqi</code> ALBroker API with an explicit listen
+IP of <code>127.0.0.1</code>, instead of <code>qi.Application</code> or <code>qi.Session()</code>:</p>
+<div class="codehilite" style="background: #f0f0f0"><pre style="line-height: 125%;"><span></span><code><span style="color: #007020; font-weight: bold">from</span><span style="color: #BBB"> </span><span style="color: #0E84B5; font-weight: bold">naoqi</span><span style="color: #BBB"> </span><span style="color: #007020; font-weight: bold">import</span> ALBroker, ALProxy
+
+broker <span style="color: #666">=</span> ALBroker(<span style="color: #4070A0">&quot;myBroker&quot;</span>, <span style="color: #4070A0">&quot;127.0.0.1&quot;</span>, <span style="color: #40A070">0</span>, ROBOT_IP, ROBOT_PORT)
+<span style="color: #007020; font-weight: bold">try</span>:
+    tts <span style="color: #666">=</span> ALProxy(<span style="color: #4070A0">&quot;ALTextToSpeech&quot;</span>)
+    tts<span style="color: #666">.</span>say(<span style="color: #4070A0">&quot;Hello&quot;</span>)
+<span style="color: #007020; font-weight: bold">finally</span>:
+    broker<span style="color: #666">.</span>shutdown()
+</code></pre></div>
+
+<p>The 2nd argument (<code>"127.0.0.1"</code>) forces NAOqi's reply listener onto the
+loopback interface only. For real Pepper, set it to <code>"0.0.0.0"</code> instead
+so the robot can reach back via LAN.</p>
+<p><code>scripts/pepper_demo/demo_pepper_omnillm.py</code> chooses the right value
+automatically based on <code>--robot-ip</code>. <code>omnillm/server/naoqi_client.py</code>
+supports both modes via the <code>--use-broker</code> flag.</p>
+<h3 id="g3-langgraph-1x-replaces-dict-state-instead-of-merging">G.3  LangGraph 1.x replaces dict state instead of merging</h3>
+<p>OmniLLM uses LangGraph's <code>StateGraph(dict)</code> as its agent state container.
+In LangGraph 1.0–1.2 (the version installed today), each node's return
+<strong>replaces</strong> the entire state by default; it does not merge keys. The
+graph was originally written expecting accumulation behaviour, which
+caused every RPC to come back as <code>{"speech": ""}</code> even though every node
+ran and the LLM completed successfully.</p>
+<p>Fix in <code>omnillm/hri/agent_graph.py</code>: wrap every node with a <code>_merge_state</code>
+helper so it returns <code>{**state, **delta}</code> instead of just <code>delta</code>:</p>
+<div class="codehilite" style="background: #f0f0f0"><pre style="line-height: 125%;"><span></span><code><span style="color: #007020; font-weight: bold">def</span><span style="color: #BBB"> </span><span style="color: #06287E">_merge_state</span>(fn):
+    <span style="color: #007020; font-weight: bold">async</span> <span style="color: #007020; font-weight: bold">def</span><span style="color: #BBB"> </span><span style="color: #06287E">wrapped</span>(state):
+        delta <span style="color: #666">=</span> <span style="color: #007020; font-weight: bold">await</span> fn(state)
+        <span style="color: #007020; font-weight: bold">return</span> {<span style="color: #666">**</span>state, <span style="color: #666">**</span>delta} <span style="color: #007020; font-weight: bold">if</span> <span style="color: #007020">isinstance</span>(delta, <span style="color: #007020">dict</span>) <span style="color: #007020; font-weight: bold">else</span> state
+    <span style="color: #007020; font-weight: bold">return</span> wrapped
+
+builder<span style="color: #666">.</span>add_node(<span style="color: #4070A0">&quot;classify_task&quot;</span>, _merge_state(_make_classify_task_node()))
+<span style="color: #60A0B0; font-style: italic"># ... wrap every node the same way</span>
+</code></pre></div>
+
+<p>If you upgrade to a LangGraph version that supports <code>Annotated</code> reducers
+on the state schema, you can revert this wrapper and use the official
+mechanism instead.</p>
+<h3 id="g4-three-module-signature-mismatches-inside-the-graph">G.4  Three module-signature mismatches inside the graph</h3>
+<p>When the graph wrapper above was applied, three latent bugs surfaced
+because nodes started running through to completion:</p>
+<table>
+<thead>
+<tr>
+<th>Caller</th>
+<th>Wrong call</th>
+<th>Correct call</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>_make_rag_node</code></td>
+<td><code>rag.query(utterance, model_id=...)</code></td>
+<td><code>rag.query(utterance)</code></td>
+</tr>
+<tr>
+<td><code>_make_smart_router_node</code> (C)</td>
+<td><code>route_for_hri_task(task_type=..., strategy=...)</code></td>
+<td><code>route_for_hri_task(hri_task_type=...)</code></td>
+</tr>
+<tr>
+<td><code>_make_smart_router_node</code> (D)</td>
+<td><code>ConsensusEngine(gateway=...)</code> + <code>engine.query(models, msgs)</code> + <code>resp.synthesis</code></td>
+<td><code>ConsensusEngine(gateway=..., config=ConsensusConfig(council_models=...))</code> + <code>engine.query_council(msgs)</code> + <code>resp.final_answer</code></td>
+</tr>
+</tbody>
+</table>
+<p>All three are fixed in the current source.</p>
+<h3 id="g5-defensive-fallback-in-apppy">G.5  Defensive fallback in <code>app.py</code></h3>
+<p>Even after G.3 and G.4, if a graph node hits an unexpected error the user
+still gets a usable response. <code>omnillm/server/app.py</code> now treats an
+empty <code>robot_action.speech</code> as "graph failed silently" and falls back to
+the direct gateway call:</p>
+<div class="codehilite" style="background: #f0f0f0"><pre style="line-height: 125%;"><span></span><code>action <span style="color: #666">=</span> result<span style="color: #666">.</span>get(<span style="color: #4070A0">&quot;robot_action&quot;</span>) <span style="color: #007020; font-weight: bold">or</span> {<span style="color: #4070A0">&quot;speech&quot;</span>: result<span style="color: #666">.</span>get(<span style="color: #4070A0">&quot;response_text&quot;</span>, <span style="color: #4070A0">&quot;&quot;</span>)}
+<span style="color: #007020; font-weight: bold">if</span> <span style="color: #007020; font-weight: bold">not</span> action<span style="color: #666">.</span>get(<span style="color: #4070A0">&quot;speech&quot;</span>):
+    logger<span style="color: #666">.</span>warning(<span style="color: #4070A0">&quot;LangGraph returned empty speech — falling back.&quot;</span>)
+    <span style="color: #60A0B0; font-style: italic"># falls through to _fallback_interact(...)</span>
+<span style="color: #007020; font-weight: bold">else</span>:
+    <span style="color: #007020; font-weight: bold">return</span> jsonify(action)
+</code></pre></div>
+
+<p>This is belt-and-braces insurance for live demos.</p>
+<h3 id="g6-the-scriptspepper_demo-folder">G.6  The <code>scripts/pepper_demo/</code> folder</h3>
+<p>Three small files live here:</p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Python</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>demo_pepper_omnillm.py</code></td>
+<td>2.7</td>
+<td>Default mode: full AI demo (server → Pepper). With <code>--check-only</code>: bridge sanity test only.</td>
+</tr>
+<tr>
+<td><code>test_all_conditions.py</code></td>
+<td>3.x</td>
+<td>Batch tests all 5 experimental conditions + multilingual against the AI server. Writes <code>test_results.txt</code>.</td>
+</tr>
+<tr>
+<td><code>README.md</code></td>
+<td>–</td>
+<td>How to run everything.</td>
+</tr>
+</tbody>
+</table>
+<p>These do not depend on any code in <code>omnillm/</code> other than the live HTTP
+endpoint at <code>localhost:5000</code>. They are deliberately self-contained so a
+demo-day failure in one part doesn't break the others.</p>
+<h3 id="g7-always-invoke-the-right-python-interpreter">G.7  Always invoke the right Python interpreter</h3>
+<p>On Windows, <code>python</code> on PATH is whatever interpreter the user installed
+most recently — often Python 3. The NAOqi side <strong>must</strong> run under
+Python 2.7 (NAOqi 2.5 was never ported). Always invoke it by full path:</p>
+<div class="codehilite" style="background: #f0f0f0"><pre style="line-height: 125%;"><span></span><code>C:\Python27\python.exe scripts\pepper_demo\demo_pepper_omnillm.py
+</code></pre></div>
+
+<p>The Python 3 side (<code>python -m omnillm.server.app</code>) should be run from
+the project venv where <code>pip install -e .</code> has been executed.</p>
 <div class='pageBreak'></div>
 
 <h2 id="closing-note">Closing Note</h2>

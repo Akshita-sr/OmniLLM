@@ -656,18 +656,18 @@ class RobotAction:
 This is the **boundary between brain and body**. The brain produces a
 `RobotAction`. The body (one of the bridge implementations) executes it.
 
-### 19.2  The Three Bridges
+### 19.2  The Pepper Bridge
 
 | Bridge | Robot | Transport | NAOqi Python 2.7? |
 |--------|-------|-----------|-------------------|
 | `PepperBridge` | Pepper | HTTP to NAOqi bridge server | Yes (separate process) |
-| `NAOBridge` | NAO | HTTP to NAOqi bridge server | Yes (separate process) |
-| `BuddyBridge` | Buddy | WebSocket | No (Android) |
 
-The Pepper / NAO bridges are nearly identical (different gesture and
-walk-API names). The Buddy bridge is genuinely different — it streams tokens
-in real time over WebSocket so the robot's TTS can start speaking before
-the LLM has finished generating.
+Earlier drafts of this codebase shipped two additional bridges
+(`NAOBridge` for the smaller NAO robot, `BuddyBridge` for the Android-
+based Buddy companion). They were removed to keep the surface area
+focused on the platform actually used in the experiments. The bridge
+interface (`omnillm/robotics/bridge.py`) is unchanged, so adding a new
+robot back later is a one-file exercise.
 
 ### 19.3  Why HTTP to NAOqi (Not Direct)?
 

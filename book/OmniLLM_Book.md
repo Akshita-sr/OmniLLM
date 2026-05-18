@@ -213,37 +213,6 @@ To keep the book finite, the following are **not** included in detail:
 - **Appendix D**  Troubleshooting Reference
 - **Appendix E**  External Resources — Papers, Libraries, Repositories
 - **Appendix F**  File Index — Every File in the Repository, One Line Each
-- **Appendix G**  End-to-End Flow Diagram — Spoken Question to Robot Action
-
-## Part IX — Pepper-LLM Integration Survey (Chapters 40–47)
-
-- **Chapter 40**  Pepper's Hardware and Software Platform
-- **Chapter 41**  NAOqi Framework, PyNAOqi, and Programmatic Connection
-- **Chapter 42**  The Eleven NAOqi Modules That Matter for LLM Integration
-- **Chapter 43**  Choregraphe as a Visual Programming IDE
-- **Chapter 44**  Programming Patterns: Audio, Tablet, Face Detection
-- **Chapter 45**  The Python 2.7 to 3.x Bridge — Five Patterns Reviewed
-- **Chapter 46**  Catalogue of Published Pepper-LLM Projects (2023–2026)
-- **Chapter 47**  Lessons Learned and Best Practices
-
-## Part X — Thesis Design Reference (Chapters 48–55)
-
-- **Chapter 48**  Literature Landscape — What Exists, What's Missing
-- **Chapter 49**  The Critical Research Gap You Will Fill
-- **Chapter 50**  Three Hypotheses
-- **Chapter 51**  The Four Task Types in Full Detail
-- **Chapter 52**  The Five Experimental Conditions
-- **Chapter 53**  Automatic and Human-Rated Metrics
-- **Chapter 54**  One-Month Execution Plan
-- **Chapter 55**  Recommended Tools and the OpenClaw Question
-
-## Part XI — Extended Beginner Material (Chapters 56–60)
-
-- **Chapter 56**  "Reading the Code" — A Single Question's Journey, Line by Line
-- **Chapter 57**  AI-Stack and Frameworks — Expanded Glossary with Rationale
-- **Chapter 58**  Choregraphe-Only Walkthrough (No Robot Needed)
-- **Chapter 59**  A Complete First Experimental Session — Worked Example
-- **Chapter 60**  Future Scope and Improvement Opportunities
 
 \newpage
 # PART I — FOUNDATIONS
@@ -2873,18 +2842,18 @@ class RobotAction:
 This is the **boundary between brain and body**. The brain produces a
 `RobotAction`. The body (one of the bridge implementations) executes it.
 
-### 19.2  The Three Bridges
+### 19.2  The Pepper Bridge
 
 | Bridge | Robot | Transport | NAOqi Python 2.7? |
 |--------|-------|-----------|-------------------|
 | `PepperBridge` | Pepper | HTTP to NAOqi bridge server | Yes (separate process) |
-| `NAOBridge` | NAO | HTTP to NAOqi bridge server | Yes (separate process) |
-| `BuddyBridge` | Buddy | WebSocket | No (Android) |
 
-The Pepper / NAO bridges are nearly identical (different gesture and
-walk-API names). The Buddy bridge is genuinely different — it streams tokens
-in real time over WebSocket so the robot's TTS can start speaking before
-the LLM has finished generating.
+Earlier drafts of this codebase shipped two additional bridges
+(`NAOBridge` for the smaller NAO robot, `BuddyBridge` for the Android-
+based Buddy companion). They were removed to keep the surface area
+focused on the platform actually used in the experiments. The bridge
+interface (`omnillm/robotics/bridge.py`) is unchanged, so adding a new
+robot back later is a one-file exercise.
 
 ### 19.3  Why HTTP to NAOqi (Not Direct)?
 
@@ -6568,6 +6537,161 @@ Every file in the repository, one line each.
 | `.venv/` | Virtual environment |
 | `results/` | Eval JSON files, exported reports, KB persistence |
 | `__pycache__/` | Python bytecode caches |
+
+\newpage
+
+## Appendix G — Field Notes: Bringing OmniLLM up on Windows 11
+
+This appendix captures the gotchas and fixes discovered while standing
+OmniLLM up end-to-end on a Windows 11 laptop talking to Choregraphe's
+virtual Pepper. None of this is exotic — but every one of these consumed
+hours the first time. They're written down so future-you doesn't lose the
+same hours.
+
+### G.1  Choregraphe's "Connect to..." dialog gotcha
+
+When you launch Choregraphe it auto-spawns a virtual Pepper in the
+background on a random port (e.g. 56471). The title bar may say
+*"Connected to a virtual robot"*, but **external Python clients cannot
+talk to that auto-spawned instance** — only Choregraphe itself can.
+
+To make the virtual robot reachable from your scripts:
+
+1. Top menu → **Connection** → **Connect to...**
+2. **Untick** both "Use fixed port" and "Use fixed IP/hostname".
+3. Click on the robot in the list (named after your user, e.g. *AKSHITA*).
+4. Click **Select**.
+
+After this the title bar says *"Connected to AKSHITA"* (or your user
+name). Only now can `omnillm`/`demo_pepper_omnillm.py`/etc. open a NAOqi
+session.
+
+**The port shown in the dialog changes every Choregraphe restart.** Note
+it and pass it via `--robot-port`. The "Use fixed port" checkbox does
+**not** start a new server on the fixed port; it only changes the
+*target* of subsequent connection attempts.
+
+### G.2  Windows 11 TCP loopback bug in NAOqi 2.5
+
+Symptom: After a successful TCP connect, the very first RPC call
+(`tts.say(...)`, even `tts.getLanguage()`) fails with:
+
+```text
+RuntimeError: ALTextToSpeech::getLanguage  Socket is not connected
+```
+
+Diagnosis: Windows 11's TCP fast-path for `127.0.0.1` interacts badly
+with NAOqi 2.5's qimessaging reply socket. The connection appears
+established at the kernel level but the qi handshake silently drops.
+The same code against a *real* Pepper at a LAN IP (e.g. 192.168.x.x)
+works perfectly — the bug is specific to loopback on Win11.
+
+Workaround: use the older `naoqi` ALBroker API with an explicit listen
+IP of `127.0.0.1`, instead of `qi.Application` or `qi.Session()`:
+
+```python
+from naoqi import ALBroker, ALProxy
+
+broker = ALBroker("myBroker", "127.0.0.1", 0, ROBOT_IP, ROBOT_PORT)
+try:
+    tts = ALProxy("ALTextToSpeech")
+    tts.say("Hello")
+finally:
+    broker.shutdown()
+```
+
+The 2nd argument (`"127.0.0.1"`) forces NAOqi's reply listener onto the
+loopback interface only. For real Pepper, set it to `"0.0.0.0"` instead
+so the robot can reach back via LAN.
+
+`scripts/pepper_demo/demo_pepper_omnillm.py` chooses the right value
+automatically based on `--robot-ip`. `omnillm/server/naoqi_client.py`
+supports both modes via the `--use-broker` flag.
+
+### G.3  LangGraph 1.x replaces dict state instead of merging
+
+OmniLLM uses LangGraph's `StateGraph(dict)` as its agent state container.
+In LangGraph 1.0–1.2 (the version installed today), each node's return
+**replaces** the entire state by default; it does not merge keys. The
+graph was originally written expecting accumulation behaviour, which
+caused every RPC to come back as `{"speech": ""}` even though every node
+ran and the LLM completed successfully.
+
+Fix in `omnillm/hri/agent_graph.py`: wrap every node with a `_merge_state`
+helper so it returns `{**state, **delta}` instead of just `delta`:
+
+```python
+def _merge_state(fn):
+    async def wrapped(state):
+        delta = await fn(state)
+        return {**state, **delta} if isinstance(delta, dict) else state
+    return wrapped
+
+builder.add_node("classify_task", _merge_state(_make_classify_task_node()))
+# ... wrap every node the same way
+```
+
+If you upgrade to a LangGraph version that supports `Annotated` reducers
+on the state schema, you can revert this wrapper and use the official
+mechanism instead.
+
+### G.4  Three module-signature mismatches inside the graph
+
+When the graph wrapper above was applied, three latent bugs surfaced
+because nodes started running through to completion:
+
+| Caller | Wrong call | Correct call |
+|--------|------------|--------------|
+| `_make_rag_node` | `rag.query(utterance, model_id=...)` | `rag.query(utterance)` |
+| `_make_smart_router_node` (C) | `route_for_hri_task(task_type=..., strategy=...)` | `route_for_hri_task(hri_task_type=...)` |
+| `_make_smart_router_node` (D) | `ConsensusEngine(gateway=...)` + `engine.query(models, msgs)` + `resp.synthesis` | `ConsensusEngine(gateway=..., config=ConsensusConfig(council_models=...))` + `engine.query_council(msgs)` + `resp.final_answer` |
+
+All three are fixed in the current source.
+
+### G.5  Defensive fallback in `app.py`
+
+Even after G.3 and G.4, if a graph node hits an unexpected error the user
+still gets a usable response. `omnillm/server/app.py` now treats an
+empty `robot_action.speech` as "graph failed silently" and falls back to
+the direct gateway call:
+
+```python
+action = result.get("robot_action") or {"speech": result.get("response_text", "")}
+if not action.get("speech"):
+    logger.warning("LangGraph returned empty speech — falling back.")
+    # falls through to _fallback_interact(...)
+else:
+    return jsonify(action)
+```
+
+This is belt-and-braces insurance for live demos.
+
+### G.6  The `scripts/pepper_demo/` folder
+
+Three small files live here:
+
+| File | Python | Purpose |
+|------|--------|---------|
+| `demo_pepper_omnillm.py` | 2.7 | Default mode: full AI demo (server → Pepper). With `--check-only`: bridge sanity test only. |
+| `test_all_conditions.py` | 3.x | Batch tests all 5 experimental conditions + multilingual against the AI server. Writes `test_results.txt`. |
+| `README.md` | – | How to run everything. |
+
+These do not depend on any code in `omnillm/` other than the live HTTP
+endpoint at `localhost:5000`. They are deliberately self-contained so a
+demo-day failure in one part doesn't break the others.
+
+### G.7  Always invoke the right Python interpreter
+
+On Windows, `python` on PATH is whatever interpreter the user installed
+most recently — often Python 3. The NAOqi side **must** run under
+Python 2.7 (NAOqi 2.5 was never ported). Always invoke it by full path:
+
+```cmd
+C:\Python27\python.exe scripts\pepper_demo\demo_pepper_omnillm.py
+```
+
+The Python 3 side (`python -m omnillm.server.app`) should be run from
+the project venv where `pip install -e .` has been executed.
 
 \newpage
 

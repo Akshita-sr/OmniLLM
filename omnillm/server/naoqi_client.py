@@ -60,17 +60,32 @@ except ImportError:
 
 # ---------------------------------------------------------------------------
 # NAOqi SDK (only available on/near Pepper hardware)
+#
+# Two import paths:
+#   - qi.Application       (modern, preferred for real Pepper)
+#   - ALBroker + ALProxy   (older, required for Windows virtual Pepper because
+#                           qi.Application hits a TCP loopback bug on Win11)
 # ---------------------------------------------------------------------------
 NAOQI_AVAILABLE = False
+QI_AVAILABLE = False
+BROKER_AVAILABLE = False
+
 try:
     import qi  # type: ignore  # NAOqi 2.x (modern)
+    QI_AVAILABLE = True
     NAOQI_AVAILABLE = True
 except ImportError:
-    try:
-        import naoqi  # type: ignore  # NAOqi 1.x legacy
-        NAOQI_AVAILABLE = True
-    except ImportError:
-        print("[WARN] NAOqi SDK not available — running in simulation mode.", file=sys.stderr)
+    pass
+
+try:
+    from naoqi import ALBroker, ALProxy  # type: ignore  # NAOqi legacy broker API
+    BROKER_AVAILABLE = True
+    NAOQI_AVAILABLE = True
+except ImportError:
+    pass
+
+if not NAOQI_AVAILABLE:
+    print("[WARN] NAOqi SDK not available — running in simulation mode.", file=sys.stderr)
 
 
 # ── Constants ──────────────────────────────────────────────────────────────────
@@ -103,14 +118,20 @@ class PepperNAOqiClient(object):
     and executes the returned RobotAction on the Pepper hardware.
     """
 
-    def __init__(self, robot_ip, robot_port, server_ip, server_port, participant_id, condition):
-        # type: (str, int, str, int, str, str) -> None
+    def __init__(self, robot_ip, robot_port, server_ip, server_port,
+                 participant_id, condition, use_broker=False):
+        # type: (str, int, str, int, str, str, bool) -> None
         self.robot_ip = robot_ip
         self.robot_port = robot_port
         self.server_url = "http://{}:{}".format(server_ip, server_port)
         self.participant_id = participant_id
         self.condition = condition
         self.session_id = str(uuid.uuid4())
+        # use_broker=True forces the legacy ALBroker pattern (needed for
+        # Choregraphe virtual Pepper on Windows 11). Real Pepper works with
+        # either, but the qi.Application path is preferred.
+        self.use_broker = use_broker
+        self._broker = None  # only used in broker mode
 
         self._app = None
         self._audio_device = None
@@ -131,25 +152,60 @@ class PepperNAOqiClient(object):
             self._connected = True
             return True
 
+        # Decide which transport to use. Broker mode is forced for virtual
+        # Pepper on Windows (qi.Application hits a TCP loopback bug there).
+        use_broker = self.use_broker or not QI_AVAILABLE
+        if use_broker and not BROKER_AVAILABLE:
+            print("[ERR] ALBroker requested but `naoqi` module not importable.",
+                  file=sys.stderr)
+            return False
+
         try:
-            self._app = qi.Application(["PepperClient", "--qi-url={}:{}".format(
-                self.robot_ip, self.robot_port
-            )])
-            self._app.start()
-            session = self._app.session
+            if use_broker:
+                # Listen on 127.0.0.1 for virtual Pepper (Windows 11 loopback
+                # workaround); on 0.0.0.0 for real Pepper so it can call back.
+                listen_ip = (
+                    "127.0.0.1"
+                    if self.robot_ip in ("127.0.0.1", "localhost")
+                    else "0.0.0.0"
+                )
+                self._broker = ALBroker(
+                    "OmniLLMBroker", listen_ip, 0,
+                    self.robot_ip, self.robot_port,
+                )
+                self._animated_speech = ALProxy("ALAnimatedSpeech")
+                self._motion = ALProxy("ALMotion")
+                self._leds = ALProxy("ALLeds")
+                # Optional services -- not all are available on every Pepper / virtual robot.
+                self._audio_device = _try_proxy("ALAudioDevice")
+                self._tablet = _try_proxy("ALTabletService")
+                self._behavior = _try_proxy("ALBehaviorManager")
+                self._face_detection = _try_proxy("ALFaceDetection")
+            else:
+                # Modern qi.Application path
+                self._app = qi.Application([
+                    "PepperClient",
+                    "--qi-url=tcp://{}:{}".format(self.robot_ip, self.robot_port),
+                ])
+                self._app.start()
+                session = self._app.session
+                self._audio_device = session.service("ALAudioDevice")
+                self._animated_speech = session.service("ALAnimatedSpeech")
+                self._motion = session.service("ALMotion")
+                self._leds = session.service("ALLeds")
+                self._tablet = session.service("ALTabletService")
+                self._behavior = session.service("ALBehaviorManager")
+                self._face_detection = session.service("ALFaceDetection")
 
-            self._audio_device = session.service("ALAudioDevice")
-            self._animated_speech = session.service("ALAnimatedSpeech")
-            self._motion = session.service("ALMotion")
-            self._leds = session.service("ALLeds")
-            self._tablet = session.service("ALTabletService")
-            self._behavior = session.service("ALBehaviorManager")
-            self._face_detection = session.service("ALFaceDetection")
+            # Wake up the robot (no-op on virtual Pepper).
+            try:
+                self._motion.wakeUp()
+            except Exception:
+                pass
 
-            # Wake up the robot
-            self._motion.wakeUp()
             self._connected = True
-            print("[OK] Connected to Pepper at {}:{}".format(self.robot_ip, self.robot_port))
+            print("[OK] Connected to Pepper at {}:{} via {} mode".format(
+                self.robot_ip, self.robot_port, "broker" if use_broker else "qi"))
             return True
         except Exception as exc:
             print("[ERR] Failed to connect to Pepper: {}".format(exc), file=sys.stderr)
@@ -333,6 +389,22 @@ class PepperNAOqiClient(object):
                 self._motion.rest()
         except Exception:
             pass
+        # Shut down the broker if we opened one.
+        if self._broker is not None:
+            try:
+                self._broker.shutdown()
+            except Exception:
+                pass
+
+
+def _try_proxy(service_name):
+    # type: (str) -> object
+    """Best-effort ALProxy lookup; returns None if the service isn't available
+    (e.g. ALAudioDevice on Choregraphe's virtual Pepper)."""
+    try:
+        return ALProxy(service_name)
+    except Exception:
+        return None
 
 
 # ── Entry point ────────────────────────────────────────────────────────────────
@@ -346,6 +418,9 @@ if __name__ == "__main__":
     parser.add_argument("--participant", default="P000", help="Participant ID")
     parser.add_argument("--condition", default="A", choices=["A", "B", "C", "D", "E"],
                         help="Experimental condition (A-E)")
+    parser.add_argument("--use-broker", action="store_true",
+                        help="Force the legacy ALBroker pattern. Required for "
+                             "Choregraphe virtual Pepper on Windows 11.")
     args = parser.parse_args()
 
     client = PepperNAOqiClient(
@@ -355,5 +430,6 @@ if __name__ == "__main__":
         server_port=args.server_port,
         participant_id=args.participant,
         condition=args.condition,
+        use_broker=args.use_broker,
     )
     client.run()
