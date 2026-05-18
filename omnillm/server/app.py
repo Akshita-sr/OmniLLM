@@ -260,10 +260,16 @@ def create_app(
                 result = _run_async(graph.ainvoke(state))
                 if result.get("error"):
                     logger.error("Graph error: %s", result["error"])
-                return jsonify(result.get("robot_action", {"speech": result.get("response_text", "")}))
+
+                action = result.get("robot_action") or {"speech": result.get("response_text", "")}
+
+                # If the graph produced no usable speech, fall back to direct gateway.
+                if not action.get("speech"):
+                    logger.warning("LangGraph returned empty speech — falling back to direct gateway.")
+                else:
+                    return jsonify(action)
             except Exception:
-                logger.exception("Graph invocation failed")
-                return jsonify({"error": "Interaction processing failed. Check server logs."}), 500
+                logger.exception("Graph invocation failed — falling back to direct gateway.")
 
         # Fallback: direct gateway call (no LangGraph)
         return _fallback_interact(

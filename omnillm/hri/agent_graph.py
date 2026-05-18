@@ -187,10 +187,9 @@ def _make_rag_node(rag: "RAGPipeline"):
     """Create the RAG Pipeline node (T1 — Info Retrieval)."""
     async def run_rag(state: dict[str, Any]) -> dict[str, Any]:
         utterance = state.get("utterance", "")
-        model_id = state.get("model_id") or rag.model_id
 
         try:
-            rag_resp = await rag.query(utterance, model_id=model_id)
+            rag_resp = await rag.query(utterance)
             chunks_text = "\n\n".join(
                 f"[{c.source}]: {c.text}" for c in rag_resp.retrieved_chunks
             )
@@ -212,10 +211,9 @@ def _make_nav_rag_node(rag: "RAGPipeline"):
     """Create the Navigation + Gesture Planner node (T2 — Navigation)."""
     async def run_nav_rag(state: dict[str, Any]) -> dict[str, Any]:
         utterance = state.get("utterance", "")
-        model_id = state.get("model_id") or rag.model_id
 
         try:
-            rag_resp = await rag.query(utterance, model_id=model_id)
+            rag_resp = await rag.query(utterance)
             chunks_text = "\n\n".join(
                 f"[{c.source}]: {c.text}" for c in rag_resp.retrieved_chunks
             )
@@ -348,12 +346,15 @@ def _make_smart_router_node(gateway: "LLMGateway"):
         try:
             if condition == "D":
                 # Consensus mode: 3 models answer, best synthesised
-                from omnillm.consensus import ConsensusEngine
-                engine = ConsensusEngine(gateway=gateway)
+                from omnillm.consensus import ConsensusEngine, ConsensusConfig
                 council_models = ["openai-gpt4o-mini", "gemini-2.5-flash", "claude-haiku"]
                 available = [m for m in council_models if m in gateway.list_models()]
                 if not available:
                     available = gateway.list_models()[:3]
+                engine = ConsensusEngine(
+                    gateway=gateway,
+                    config=ConsensusConfig(council_models=available),
+                )
 
                 system_prompt = (
                     "You are Pepper, a helpful social robot in the IRAI Lab. "
@@ -368,19 +369,18 @@ def _make_smart_router_node(gateway: "LLMGateway"):
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_msg},
                 ]
-                council_resp = await engine.query(available, messages)
+                council_resp = await engine.query_council(messages)
                 return {
-                    "response_text": council_resp.synthesis,
+                    "response_text": council_resp.final_answer,
                     "model_id": "council:" + "+".join(available),
                 }
 
             elif condition == "C":
                 # Smart-routed: OmniLLM selects best model for task type
-                from omnillm.router import SmartRouter, RoutingStrategy
+                from omnillm.router import SmartRouter
                 router = SmartRouter()
                 decision = router.route_for_hri_task(
-                    task_type=task_type,
-                    strategy=RoutingStrategy.TASK_TYPE,
+                    hri_task_type=task_type,
                 )
                 target = decision.model_id
                 system_prompt = (
@@ -555,27 +555,38 @@ def build_hri_graph(
     # Use a plain dict as state to be compatible with LangGraph's StateGraph
     builder = StateGraph(dict)
 
+    # In LangGraph 1.x with StateGraph(dict), each node's return REPLACES state
+    # instead of merging. Wrap every node so it returns the merged state
+    # ({**state, **delta}) and the original keys survive through the pipeline.
+    def _merge_state(fn):
+        async def wrapped(state):
+            delta = await fn(state)
+            if not isinstance(delta, dict):
+                return state
+            return {**state, **delta}
+        return wrapped
+
     # Create a minimal RAG pipeline for fallback if none provided
     _rag = rag
 
     # ── Add nodes ──────────────────────────────────────────────────────────────
-    builder.add_node("transcribe_audio", _make_transcribe_node(gateway))
-    builder.add_node("detect_language", _make_detect_language_node())
-    builder.add_node("classify_task", _make_classify_task_node())
+    builder.add_node("transcribe_audio", _merge_state(_make_transcribe_node(gateway)))
+    builder.add_node("detect_language", _merge_state(_make_detect_language_node()))
+    builder.add_node("classify_task", _merge_state(_make_classify_task_node()))
 
     if _rag is not None:
-        builder.add_node("rag", _make_rag_node(_rag))
-        builder.add_node("nav_rag", _make_nav_rag_node(_rag))
+        builder.add_node("rag", _merge_state(_make_rag_node(_rag)))
+        builder.add_node("nav_rag", _merge_state(_make_nav_rag_node(_rag)))
     else:
         # If no RAG provided, both rag/nav_rag fall back to direct LLM
-        builder.add_node("rag", _make_direct_llm_node(gateway, default_model))
-        builder.add_node("nav_rag", _make_direct_llm_node(gateway, default_model))
+        builder.add_node("rag", _merge_state(_make_direct_llm_node(gateway, default_model)))
+        builder.add_node("nav_rag", _merge_state(_make_direct_llm_node(gateway, default_model)))
 
-    builder.add_node("direct_llm", _make_direct_llm_node(gateway, default_model))
-    builder.add_node("multilingual_llm", _make_multilingual_llm_node(gateway))
-    builder.add_node("smart_router", _make_smart_router_node(gateway))
-    builder.add_node("generate_action_plan", _make_action_plan_node())
-    builder.add_node("log_interaction", _make_log_node(logger))
+    builder.add_node("direct_llm", _merge_state(_make_direct_llm_node(gateway, default_model)))
+    builder.add_node("multilingual_llm", _merge_state(_make_multilingual_llm_node(gateway)))
+    builder.add_node("smart_router", _merge_state(_make_smart_router_node(gateway)))
+    builder.add_node("generate_action_plan", _merge_state(_make_action_plan_node()))
+    builder.add_node("log_interaction", _merge_state(_make_log_node(logger)))
 
     # ── Add edges ──────────────────────────────────────────────────────────────
     builder.set_entry_point("transcribe_audio")
