@@ -253,6 +253,7 @@ class RAGPipeline:
         question: str,
         system_prompt: str | None = None,
         score_faithfulness: bool = False,
+        model_id: str | None = None,
     ) -> RAGResponse:
         """Generate a RAG-grounded answer for a question.
 
@@ -261,6 +262,11 @@ class RAGPipeline:
             system_prompt: Optional system prompt to prepend.
             score_faithfulness: If True, uses LLM-as-judge to score how
                 faithfully the response uses the retrieved context.
+            model_id: Optional one-off model override.  When provided, the
+                answer is generated with this model instead of the pipeline's
+                default ``self.model_id``.  Used by the LangGraph nodes so
+                Condition B (local Llama) actually exercises Ollama through
+                the same RAG retrieval as Condition A.
 
         Returns:
             :class:`RAGResponse` with answer, retrieved chunks, and scores.
@@ -289,13 +295,14 @@ class RAGPipeline:
             {"role": "user", "content": user_content},
         ]
 
-        llm_response = await self.gateway.query(self.model_id, messages)
+        effective_model = model_id or self.model_id
+        llm_response = await self.gateway.query(effective_model, messages)
         latency_ms = (time.perf_counter() - start) * 1000
 
         rag_response = RAGResponse(
             answer=llm_response.content,
             retrieved_chunks=retrieved,
-            model_id=self.model_id,
+            model_id=effective_model,
             rag_enabled=bool(retrieved),
             latency_ms=latency_ms,
         )

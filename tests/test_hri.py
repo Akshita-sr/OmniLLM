@@ -158,15 +158,15 @@ class TestLanguageDetector:
         assert model == "openai-gpt4o-mini"
 
     def test_get_optimal_model_french(self):
-        # Temporarily openai-gpt4o-mini while Gemini quota is exhausted.
-        # Revert to "gemini-flash" once Google free-tier access is restored.
+        # Non-English now routes to claude-haiku — strong multilingual coverage
+        # without the Google free-tier quota fragility that broke gemini-flash.
         model = self.detector.get_optimal_model("fr")
-        assert model == "openai-gpt4o-mini"
+        assert model == "claude-haiku"
 
     def test_get_optimal_model_unknown(self):
-        # Same as above — fallback also rerouted off gemini-flash.
+        # Unknown language defaults to the multilingual model (claude-haiku).
         model = self.detector.get_optimal_model("xx")
-        assert model == "openai-gpt4o-mini"
+        assert model == "claude-haiku"
 
     def test_custom_model_map(self):
         detector = LanguageDetector(custom_model_map={"fr": "claude-haiku"})

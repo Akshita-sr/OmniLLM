@@ -5,10 +5,12 @@
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://img.shields.io/badge/tests-278%20passing-brightgreen.svg)](#testing)
+[![Tests](https://img.shields.io/badge/tests-289%20passing-brightgreen.svg)](#testing)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/Akshita-sr/OmniLLM/pulls)
 
 > **The complete book lives at [`book/OmniLLM_Book.pdf`](book/OmniLLM_Book.pdf)** — 168 pages covering every line of code, every endpoint, the Pepper / NAOqi / Choregraphe stack, and the experimental design. Rebuild it with `python book/build_pdf.py`. This README is the fast tour.
+
+> **2026-05-20 deployment notes (DIBRIS / Sgorbissa lab).** The `knowledge_base/` directory now ships with content for the **University of Genoa, DIBRIS, Prof. Antonio Sgorbissa's HRI lab** (the lab that hosts the real Pepper). The previous generic IRAI-Lab content is preserved under `knowledge_base/_legacy_irai/` for reference. Non-English (T4) prompts now route to **claude-haiku** (was gemini-flash, which was rate-limited on the Google free tier). Condition B (fixed local LLM) now reliably exercises the **local Llama via Ollama** end-to-end: `omnillm/server/app.py` translates the requested condition into the correct model id *before* invoking the LangGraph pipeline, and `RAGPipeline.query()` accepts a per-call `model_id=` override that the agent graph passes through. Tomorrow's real-Pepper checklist lives in [`scripts/pepper_demo/REAL_PEPPER_CHECKLIST.md`](scripts/pepper_demo/REAL_PEPPER_CHECKLIST.md).
 
 ---
 

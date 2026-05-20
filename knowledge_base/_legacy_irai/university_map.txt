@@ -1,0 +1,68 @@
+BUILDING C — ENGINEERING WING — NAVIGATION GUIDE
+=================================================
+(For use with IRAI Lab visitor guidance system)
+
+BUILDING OVERVIEW
+-----------------
+Building C is a 5-storey building (Ground + 4 floors) in the Engineering Wing
+of the university campus.
+
+Ground Floor: Reception/Lobby, Security Desk, Seminar Rooms A-100 to A-105,
+              Disabled access toilets, Lifts (2), Staircase A and B.
+1st Floor: Faculty Offices (B-101 to B-150), Staff toilets, Small kitchen.
+2nd Floor: Seminar Rooms (B-201 to B-205), PhD Offices (B-210 to B-230),
+           Printing room, Toilets.
+3rd Floor: IRAI Lab (Room 305), Server Room (306), User Study Room (307),
+           Workshop (308), Breakout/Café (310), Toilets.
+4th Floor: Prof. Martinez's office (C-401), Dr. Patel's office (C-402),
+           Conference Room (C-410), Archive storage.
+
+DIRECTIONS FROM MAIN ENTRANCE TO KEY LOCATIONS
+-----------------------------------------------
+To the IRAI Lab (Room 305):
+  From the main entrance: Go straight past the security desk.
+  Take the lift or Staircase A on your left up to the 3rd floor.
+  Turn right out of the lift/staircase. Walk along the corridor.
+  Room 305 is on your right, approximately 30 metres from the staircase.
+  Look for the "IRAI Lab" sign on the door.
+
+To the Seminar Room B-201:
+  From the main entrance: Take the lift to the 2nd floor.
+  Turn left out of the lift. Room B-201 is the first room on your right.
+
+To Lecture Hall D-100:
+  Lecture Hall D-100 is in Building D (adjacent, connected via covered walkway).
+  From Building C main entrance: Exit through the main door.
+  Turn right and follow the covered walkway for about 50 metres.
+  Enter Building D — Lecture Hall D-100 is immediately on your left.
+
+To Prof. Martinez's Office (C-401):
+  Take the lift to the 4th floor. Turn left. Room C-401 is the 3rd door on the left.
+
+To Dr. Patel's Office (C-402):
+  Take the lift to the 4th floor. Turn left. Room C-402 is the 4th door on the left.
+
+To the Cafeteria / Main Canteen:
+  The main cafeteria is in Building A (Central Building).
+  From Building C: Exit via the main entrance. Cross the courtyard (approx. 100 metres).
+  Enter Building A through the glass doors. The cafeteria is on the ground floor,
+  straight ahead.
+
+To the Toilets (3rd Floor):
+  From the IRAI Lab (Room 305): Turn left out of the lab door.
+  Walk to the end of the corridor. Toilets are on your right.
+  Accessible toilet: Near the lift, same corridor.
+
+To the Workshop (Room 308):
+  From the IRAI Lab (Room 305): Turn right out of the lab door.
+  Room 308 is two doors down on the right.
+
+To the Breakout/Café Area (Room 310):
+  From the IRAI Lab (Room 305): Turn right out of the lab door.
+  Walk to the end of the corridor. Room 310 is the last door on the left.
+
+EMERGENCY EXITS
+---------------
+Staircase A: Near the lifts on each floor (main route).
+Staircase B: At the far end of the corridor on each floor (emergency exit only).
+Assembly Point: Car park area behind Building C.

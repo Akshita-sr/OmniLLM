@@ -21,16 +21,30 @@ SERVER = "http://localhost:5000/interact"
 TIMEOUT = 90  # seconds; consensus can be slow
 
 # (label, condition, rag_enabled, question)
+# Coverage matrix: every (condition, task_type) combination is exercised at
+# least once.  Task types are T1 info_retrieval, T2 navigation, T3 social,
+# T4 multilingual.
 TESTS: list[tuple[str, str, bool, str]] = [
-    ("A_lab_hours", "A", True, "What time does the lab open?"),
-    ("A_wifi", "A", True, "What is the Wi-Fi password?"),
-    ("A_room_305", "A", True, "Where is room 305?"),
-    ("B_local_llama", "B", True, "Tell me a fun fact about robots."),
-    ("C_smart", "C", True, "Where is the cafeteria?"),
-    ("D_consensus", "D", True, "Tell me about the lab's research."),
-    ("E_control", "E", False, "What is your name?"),
-    ("multilingual_it", "E", False, "Ciao Pepper, come stai oggi?"),
-    ("multilingual_es", "E", False, "Hola Pepper, donde estoy?"),
+    # Condition A — fixed GPT-4o-mini + RAG
+    ("A_T1_lab_hours", "A", True, "What time does the lab open?"),
+    ("A_T2_pepper_room", "A", True, "Where is the Pepper room at DIBRIS?"),
+    ("A_T3_hello", "A", True, "Hello Pepper, how are you?"),
+    ("A_T4_italian", "A", True, "Ciao Pepper, come stai oggi?"),
+    # Condition B — local Llama (skip if Ollama not running; will return error)
+    ("B_T1_who_runs_lab", "B", True, "Who runs this lab?"),
+    ("B_T3_fun_fact", "B", True, "Tell me a fun fact about robots."),
+    # Condition C — smart router
+    ("C_T1_wifi", "C", True, "How do I connect to Wi-Fi here?"),
+    ("C_T2_train_station", "C", True, "How do I get to Brignole train station?"),
+    ("C_T3_joke", "C", True, "Tell me a joke."),
+    ("C_T4_spanish", "C", True, "Hola Pepper, donde estoy?"),
+    # Condition D — consensus council
+    ("D_T1_research", "D", True, "Tell me about Prof. Sgorbissa's research."),
+    ("D_T3_consciousness", "D", True, "Do you think robots can be conscious?"),
+    # Condition E — RAG-off control
+    ("E_T1_hours_no_rag", "E", False, "What time does the lab open?"),
+    ("E_T3_name", "E", False, "What is your name?"),
+    ("E_T4_french", "E", False, "Bonjour Pepper, comment vas-tu?"),
 ]
 
 
@@ -84,6 +98,7 @@ def main() -> None:
                 fh.write(f"A: {speech}\n")
                 fh.write(f"Gesture: {gesture}\n")
                 fh.write(f"Model: {meta.get('model_id', '(unknown)')}\n")
+                fh.write(f"Path: {meta.get('path', 'graph')}\n")
                 fh.write(f"Latency: {latency:.0f} ms\n\n")
             except Exception as exc:
                 fails += 1

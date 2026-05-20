@@ -68,30 +68,31 @@ class LanguageDetectionResult:
 
 
 # Mapping of language code → recommended OmniLLM model for that language.
-# Historically non-English languages routed to gemini-flash (strong multilingual,
-# cheap). Temporarily routed to openai-gpt4o-mini while the project's Google
-# free-tier quota is exhausted (429 RESOURCE_EXHAUSTED). When Gemini access is
-# restored, revert the non-"en" entries back to "gemini-flash".
+# English stays on openai-gpt4o-mini (cheap and strong on English).
+# Non-English routes to claude-haiku — Anthropic's Haiku 4.5 is strong in
+# multilingual settings, fast enough for live HRI, and not subject to the
+# Google free-tier quota that previously knocked gemini-flash offline.
 _LANGUAGE_MODEL_MAP: dict[str, str] = {
     # European languages
     "en": "openai-gpt4o-mini",
-    "fr": "openai-gpt4o-mini",
-    "de": "openai-gpt4o-mini",
-    "es": "openai-gpt4o-mini",
-    "it": "openai-gpt4o-mini",
-    "pt": "openai-gpt4o-mini",
-    "nl": "openai-gpt4o-mini",
-    "ru": "openai-gpt4o-mini",
-    "pl": "openai-gpt4o-mini",
+    "fr": "claude-haiku",
+    "de": "claude-haiku",
+    "es": "claude-haiku",
+    "it": "claude-haiku",
+    "pt": "claude-haiku",
+    "nl": "claude-haiku",
+    "ru": "claude-haiku",
+    "pl": "claude-haiku",
     # Asian languages
-    "zh": "openai-gpt4o-mini",
-    "ja": "openai-gpt4o-mini",
-    "ko": "openai-gpt4o-mini",
-    "ar": "openai-gpt4o-mini",
-    "hi": "openai-gpt4o-mini",
-    "tr": "openai-gpt4o-mini",
-    # Default for unknown languages
-    "unknown": "openai-gpt4o-mini",
+    "zh": "claude-haiku",
+    "ja": "claude-haiku",
+    "ko": "claude-haiku",
+    "ar": "claude-haiku",
+    "hi": "claude-haiku",
+    "tr": "claude-haiku",
+    # Default for unknown languages — Claude Haiku has the widest multilingual
+    # coverage of the available HRI-tier models.
+    "unknown": "claude-haiku",
 }
 
 # Unicode script → likely language (coarse mapping for script-based detection)

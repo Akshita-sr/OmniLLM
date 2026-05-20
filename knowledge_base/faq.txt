@@ -1,91 +1,128 @@
-IRAI LAB — FREQUENTLY ASKED QUESTIONS (FAQ)
-============================================
+DIBRIS / SGORBISSA LAB — FREQUENTLY ASKED QUESTIONS
+====================================================
 
 GENERAL
 -------
-Q: What does IRAI stand for?
-A: Intelligent Robotics and Artificial Intelligence. The IRAI Lab was established
-   in 2021 as part of the university's commitment to AI and robotics research.
+Q: Where am I?
+A: You are at DIBRIS, the Department of Informatics, Bioengineering, Robotics
+   and Systems Engineering of the University of Genoa (Università degli Studi
+   di Genova). The building is Via Dodecaneso 35, in the Albaro / San Martino
+   area of Genoa, Italy.
 
-Q: Who runs the lab?
-A: The lab is led by Prof. Alejandro Martinez (Principal Investigator) and
-   Dr. Sarah Patel (Lab Manager and co-investigator). Contact the lab at
-   irai-lab@university.edu.
+Q: Who runs the social-robotics lab here?
+A: The lab is led by Prof. Antonio Sgorbissa. His research group works on
+   human-robot interaction, social robotics, cultural competence in robots,
+   and assistive autonomous systems. You can reach him at
+   antonio.sgorbissa@unige.it.
 
 Q: Can I visit the lab?
-A: Yes! Visitors are welcome during opening hours (Mon–Fri 08:00–20:00,
-   Sat 09:00–14:00). Please contact us in advance to arrange a visit.
-   For participant visits (user studies), you will receive a specific appointment.
+A: Yes. Visits should be arranged in advance by email. The lab is open to
+   visitors during normal working hours (Monday–Friday, 08:30–19:00) and the
+   secretariat at the main entrance can direct you to the Pepper room.
+
+Q: What language is spoken here?
+A: Italian is the working language, but English is widely spoken — most lab
+   members publish in English and host international visitors regularly.
 
 ROBOTS
 ------
-Q: What robots does the lab have?
-A: The lab has four robotic platforms: Pepper (social humanoid robot, SoftBank
-   Robotics), NAO (smaller humanoid, also SoftBank), Buddy (companion robot,
-   Blue Frog Robotics), and TurtleBot4 (mobile navigation research platform).
+Q: What robot is this?
+A: This is Pepper, a humanoid social robot made by SoftBank Robotics. The unit
+   in this lab runs NAOqi 2.5 firmware and is used as the embodiment platform
+   for the OmniLLM Embodied LLM Arena experiment.
 
-Q: Can I interact with the robots?
-A: Yes, during open lab days and scheduled user studies. Always have a lab member
-   present and maintain a 1-metre safety perimeter around moving robots.
+Q: Why is Pepper not moving its legs?
+A: Pepper does not have legs. It moves on a 3-wheel omnidirectional base. The
+   torso, arms and head are articulated and the chest tablet is used as an
+   extra output channel for images and short text.
 
-Q: What is Pepper used for in the lab?
-A: Pepper is our primary human-robot interaction (HRI) research platform.
-   Currently it powers the OmniLLM Embodied LLM Arena study, comparing
-   different LLM backends for social interaction tasks.
+Q: What does the OmniLLM project do?
+A: OmniLLM lets Pepper use several different Large Language Models as its
+   "brain". In an experimental session you talk to Pepper, and the system
+   either uses one fixed LLM (Condition A, B, or E), a smart router that
+   picks the best LLM for each kind of question (Condition C), or a council
+   of three LLMs whose answers are merged (Condition D). The goal is to
+   compare LLMs in a real embodied setting, not just on text benchmarks.
+
+Q: Can I interact with the robot?
+A: Yes, during scheduled study sessions. A lab member will always be present.
+   Please stay at the marked "participant" position and let the robot finish
+   speaking before you reply.
 
 WIFI AND IT
 -----------
-Q: What is the visitor WiFi password?
-A: Visitor WiFi: Network "UniGuest", Password: Welcome2026!
-   Eduroam is also available throughout the building.
+Q: How do I connect to Wi-Fi?
+A: If you are from another university, use Eduroam with your home credentials.
+   If you are a guest without an Eduroam account, ask at reception for a
+   UniGE-Guest voucher.
 
-Q: Can I print in the lab?
-A: Visitors can use the black-and-white printer in Room 310 (breakout area).
-   For colour printing, ask a lab member (access code required).
-
-Q: Can I charge my laptop in the lab?
-A: Yes, power sockets are available at every workstation and in Room 310.
-   Please bring your own cable/adapter.
+Q: Is there a printer I can use?
+A: Visitors do not normally have printer access; ask the secretariat for help
+   if you need a single document printed.
 
 SAFETY
 ------
-Q: What should I do in an emergency?
-A: Emergency number (internal): 999. External: +44 20 7946 0999.
-   Emergency exits are signposted — Staircase A (near lifts) is the primary exit.
-   The assembly point is the car park behind Building C.
+Q: What should I do if Pepper moves unexpectedly?
+A: Stay calm and step back to a safe distance. If you are in immediate danger,
+   the experimenter will press Pepper's orange back button to stop the motors.
+   You can also tell the experimenter to abort the session at any time.
 
-Q: Where is the first aid kit?
-A: Room 310 (breakout/café area), mounted on the wall near the coffee machine.
+Q: Is the lab safe for people with sensory sensitivities?
+A: Pepper's eye LEDs change colour during interaction and the robot uses
+   gestures while speaking. If this is uncomfortable for you, tell the
+   experimenter and the LEDs can be kept on a neutral colour.
 
-Q: Are there any safety rules I need to know?
-A: The main rules are: (1) Announce yourself when entering — robots may be active.
-   (2) Keep 1 metre away from moving robots. (3) Do not touch equipment unless
-   invited by a lab member. (4) No food or drink near robot equipment.
+Q: What is the emergency number in Italy?
+A: Dial 112 — the European general emergency number. The university
+   switchboard is +39 010 209 9111.
 
 RESEARCH PARTICIPATION
 -----------------------
-Q: How can I participate in a user study?
-A: Contact Alice Chen (a.chen@university.edu) or sign up via the participant
-   recruitment form on the lab website. Studies typically take 30–60 minutes
-   and may offer a small payment or course credit.
+Q: How can I participate in a study?
+A: Contact the lab by email at antonio.sgorbissa@unige.it. Studies typically
+   take 30–60 minutes and may be reimbursed in vouchers or course credit,
+   depending on the specific call.
 
 Q: What data is collected in the OmniLLM study?
-A: Voice recordings (transcribed and then deleted), questionnaire responses,
-   interaction timestamps, and performance metrics. No personally identifiable
-   information is stored after anonymisation. Full ethics approval obtained.
+A: Audio of your speech (transcribed and then deleted), the text the robot
+   said back, questionnaire responses on a 1–7 Likert scale, optional
+   Godspeed subscale ratings, latency / token / cost metrics, and (with your
+   consent) one optional photograph for documentation purposes. All data is
+   anonymised before any analysis.
 
 Q: Is participation voluntary?
-A: Yes, fully voluntary. You may withdraw at any time without giving a reason,
-   with no negative consequences.
+A: Yes, fully voluntary. You can withdraw at any time without giving a reason
+   and without any negative consequences. Withdrawn data is deleted.
 
-SCHEDULE AND EVENTS
--------------------
-Q: Are there regular seminars I can attend?
-A: Yes! The Robotics Reading Group meets every Friday at 12:00 in Room 310.
-   The Department Colloquium is open to all and runs monthly.
-   Check the lab website or ask at reception for the current schedule.
+Q: Who do I contact if I have a complaint about a study?
+A: Contact Prof. Antonio Sgorbissa (antonio.sgorbissa@unige.it) or the
+   department's research ethics committee via dibris@dibris.unige.it.
 
-Q: When is the next Lab Open Day?
-A: The next Lab Open Day is 15th April 2026, 13:00–17:00 in Room 305.
-   Robot demonstrations, research presentations, and refreshments.
-   All welcome — no registration needed.
+OPENING HOURS AND SCHEDULE
+--------------------------
+Q: When is the lab open?
+A: Monday–Friday, 08:30–19:00. Saturdays by appointment. Closed on Sunday and
+   Italian national holidays.
+
+Q: What time does the lab open?
+A: The lab opens at 08:30 on weekdays.
+
+Q: What time does the lab close?
+A: The lab closes at 19:00 on weekdays.
+
+Q: Are there regular seminars?
+A: Yes, the DIBRIS robotics seminars run during the academic year. Topics and
+   dates are posted on the DIBRIS website (https://www.dibris.unige.it/).
+
+GETTING HERE
+------------
+Q: How do I get to DIBRIS?
+A: The address is Via Dodecaneso 35, 16146 Genova. From Genova Brignole train
+   station it is about a 12-minute walk down Corso Italia, or you can take
+   buses 17 or 35 along the seafront and walk up. From the airport, take the
+   Volabus shuttle to Brignole and continue by bus or on foot.
+
+Q: Is there parking?
+A: Limited paid parking on Via Dodecaneso. Some surrounding streets are part
+   of the Genoa ZTL (limited-traffic zone) — read the road signs before
+   parking, or use one of the nearby public car parks.

@@ -202,10 +202,10 @@ routing:
     - gemini-2.5-flash
   # HRI task-type routing: maps task category → preferred model
   hri_task_routing:
-    info_retrieval: openai-gpt4o-mini   # RAG-capable, accurate
-    navigation: openai-gpt4o-mini        # was gemini-flash; routed off while Gemini free-tier quota is exhausted
+    info_retrieval: openai-gpt4o-mini    # RAG-capable, accurate, cheap
+    navigation: claude-haiku             # low-latency reply for live spatial guidance + multilingual fallback
     social_conversation: claude-haiku    # natural, empathetic
-    multilingual: openai-gpt4o-mini      # was gemini-flash; same reason. T4 quality on non-English may drop until restored.
+    multilingual: claude-haiku           # Haiku has strong multilingual coverage and no Google free-tier quota risk
   # Experimental conditions for Embodied LLM Arena
   hri_conditions:
     A: openai-gpt4o-mini   # Fixed cloud baseline

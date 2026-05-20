@@ -1,68 +1,90 @@
-BUILDING C — ENGINEERING WING — NAVIGATION GUIDE
-=================================================
-(For use with IRAI Lab visitor guidance system)
+DIBRIS — VIA DODECANESO 35 — NAVIGATION GUIDE
+==============================================
+(For use with Pepper visitor-guidance demos at the Sgorbissa lab)
 
 BUILDING OVERVIEW
 -----------------
-Building C is a 5-storey building (Ground + 4 floors) in the Engineering Wing
-of the university campus.
+DIBRIS is the Department of Informatics, Bioengineering, Robotics and Systems
+Engineering of the University of Genoa. The main building at Via Dodecaneso 35
+is a multi-storey complex on the slope above the Genoa seafront, in the
+Albaro / San Martino area. The Sgorbissa social-robotics lab and the Pepper
+robot are located on the ground floor wing.
 
-Ground Floor: Reception/Lobby, Security Desk, Seminar Rooms A-100 to A-105,
-              Disabled access toilets, Lifts (2), Staircase A and B.
-1st Floor: Faculty Offices (B-101 to B-150), Staff toilets, Small kitchen.
-2nd Floor: Seminar Rooms (B-201 to B-205), PhD Offices (B-210 to B-230),
-           Printing room, Toilets.
-3rd Floor: IRAI Lab (Room 305), Server Room (306), User Study Room (307),
-           Workshop (308), Breakout/Café (310), Toilets.
-4th Floor: Prof. Martinez's office (C-401), Dr. Patel's office (C-402),
-           Conference Room (C-410), Archive storage.
+FROM THE MAIN ENTRANCE
+----------------------
+Main entrance: from Via Dodecaneso, walk up the short ramp and through the
+glass doors. The reception desk is straight ahead.
 
-DIRECTIONS FROM MAIN ENTRANCE TO KEY LOCATIONS
------------------------------------------------
-To the IRAI Lab (Room 305):
-  From the main entrance: Go straight past the security desk.
-  Take the lift or Staircase A on your left up to the 3rd floor.
-  Turn right out of the lift/staircase. Walk along the corridor.
-  Room 305 is on your right, approximately 30 metres from the staircase.
-  Look for the "IRAI Lab" sign on the door.
+TO THE SGORBISSA HRI LAB AND PEPPER ROOM
+----------------------------------------
+1. From the reception desk, walk straight ahead past the lifts on your right.
+2. Turn left into the ground-floor corridor.
+3. The HRI lab and Pepper experiment room are at the end of this corridor,
+   on your right. Look for the door labelled "Laboratorio HRI / Sgorbissa".
+4. If a session is running you may see a "Do Not Disturb" sign on the door —
+   wait at the bench opposite until the experimenter invites you in.
 
-To the Seminar Room B-201:
-  From the main entrance: Take the lift to the 2nd floor.
-  Turn left out of the lift. Room B-201 is the first room on your right.
+TO THE DIBRIS SECRETARIAT
+-------------------------
+1. From the main entrance, turn right at the reception desk.
+2. The secretariat is the first door on the right, labelled "Segreteria DIBRIS".
+3. The secretariat handles visitor badges, building access cards, and contact
+   with the academic staff.
 
-To Lecture Hall D-100:
-  Lecture Hall D-100 is in Building D (adjacent, connected via covered walkway).
-  From Building C main entrance: Exit through the main door.
-  Turn right and follow the covered walkway for about 50 metres.
-  Enter Building D — Lecture Hall D-100 is immediately on your left.
+TO PROF. SGORBISSA'S OFFICE
+---------------------------
+Prof. Sgorbissa's office is on an upper floor of the DIBRIS building. The
+exact room number is signposted on the office door directory next to the lift
+on each floor. For appointments, please email antonio.sgorbissa@unige.it.
 
-To Prof. Martinez's Office (C-401):
-  Take the lift to the 4th floor. Turn left. Room C-401 is the 3rd door on the left.
+TO THE TOILETS
+--------------
+Toilets are on the ground floor along the corridor opposite the lifts.
+Accessible toilets are next to the main lift. There are additional toilets on
+each upper floor near the staircases.
 
-To Dr. Patel's Office (C-402):
-  Take the lift to the 4th floor. Turn left. Room C-402 is the 4th door on the left.
+TO THE DIBRIS LECTURE THEATRES
+------------------------------
+Two large lecture theatres ("Aula Magna" and "Aula 218") are used for DIBRIS
+courses and seminars. From the main entrance, take the lift to the relevant
+floor — Aula Magna is on the ground floor at the back of the building, and
+Aula 218 is on the second floor. Smaller seminar rooms ("Sala riunioni")
+are scattered along the upper-floor corridors.
 
-To the Cafeteria / Main Canteen:
-  The main cafeteria is in Building A (Central Building).
-  From Building C: Exit via the main entrance. Cross the courtyard (approx. 100 metres).
-  Enter Building A through the glass doors. The cafeteria is on the ground floor,
-  straight ahead.
+TO THE CAFFETTERIA / COFFEE MACHINES
+------------------------------------
+There are coffee machines on every floor near the staircases. The nearest
+cafeteria-style bar is a short walk along Corso Italia (the seafront road)
+or down Via Dodecaneso toward Brignole.
 
-To the Toilets (3rd Floor):
-  From the IRAI Lab (Room 305): Turn left out of the lab door.
-  Walk to the end of the corridor. Toilets are on your right.
-  Accessible toilet: Near the lift, same corridor.
+TO THE TRAIN STATION (GENOVA BRIGNOLE)
+--------------------------------------
+From the DIBRIS main entrance:
+1. Walk down Via Dodecaneso toward the seafront.
+2. Turn right onto Corso Italia.
+3. Continue for roughly 1 km — the station is signposted as "Genova Brignole".
+4. Total walking time: approximately 12 minutes.
 
-To the Workshop (Room 308):
-  From the IRAI Lab (Room 305): Turn right out of the lab door.
-  Room 308 is two doors down on the right.
-
-To the Breakout/Café Area (Room 310):
-  From the IRAI Lab (Room 305): Turn right out of the lab door.
-  Walk to the end of the corridor. Room 310 is the last door on the left.
+TO PIAZZA DE FERRARI (CITY CENTRE)
+----------------------------------
+Take any bus heading west along Corso Italia or Via Casaregis (lines 17 / 31)
+and ride to Piazza Cavour or De Ferrari. Walking time is about 25–30 minutes.
 
 EMERGENCY EXITS
 ---------------
-Staircase A: Near the lifts on each floor (main route).
-Staircase B: At the far end of the corridor on each floor (emergency exit only).
-Assembly Point: Car park area behind Building C.
+- Main staircase: next to the lifts on each floor.
+- Secondary staircase: at the far end of each corridor.
+- Evacuation assembly point: the open courtyard on Via Dodecaneso side of the
+  building. Follow the green emergency-exit signs.
+
+ACCESSIBILITY
+-------------
+The main entrance is wheelchair-accessible via the ramp on Via Dodecaneso.
+Lifts service all floors. Accessible toilets are on the ground floor.
+
+LANDMARKS NEARBY
+----------------
+- Genova Brignole train station (~1 km).
+- Corso Italia seafront promenade (~250 m downhill).
+- San Martino hospital and medical school (across the campus, ~15 min walk).
+- Boccadasse fishing village (~25 min walk along Corso Italia).

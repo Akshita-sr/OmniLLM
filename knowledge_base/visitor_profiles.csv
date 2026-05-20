@@ -1,11 +1,8 @@
-name,role,department,research_interests,visit_date,arrival_time,host,notes
-Alice Chen,PhD Student,Computer Science,"Natural language processing, human-robot interaction",2026-04-01,09:30,Prof. Martinez,Working on thesis chapter 3
-Bob Nguyen,Industry Partner,Robotics Corp,"Autonomous navigation, SLAM",2026-04-01,10:00,Dr. Patel,Demo of new Lidar module
-Carol Dupont,Visiting Researcher,University of Paris,"Affective computing, social robotics",2026-04-01,11:00,Prof. Martinez,Collaboration visit (2 weeks)
-David Kim,Undergraduate Intern,Electrical Engineering,"Machine learning, sensor fusion",2026-04-02,09:00,Dr. Patel,Summer internship start
-Eva Rossi,Postdoc,AI Institute Rome,"Multimodal LLMs, gesture recognition",2026-04-02,14:00,Prof. Martinez,Joint paper discussion
-Fatima Al-Zahra,MSc Student,Human-Computer Interaction,"User experience, trust in AI",2026-04-03,10:30,Dr. Patel,UX study participant
-George Okonkwo,PhD Student,Computer Science,"Reinforcement learning, robot manipulation",2026-04-03,09:00,Prof. Martinez,Weekly meeting
-Hannah Schmidt,Lab Technician,Facilities,"Hardware maintenance, electronics",2026-04-01,08:00,Lab Manager,Regular maintenance day
-Ivan Petrov,Visiting Professor,Moscow Polytechnic,"Computer vision, deep learning",2026-04-04,10:00,Prof. Martinez,Guest lecture at 14:00
-Julia Santos,PhD Candidate,Cognitive Science,"Embodied cognition, perception",2026-04-04,13:00,Dr. Patel,Ethics committee presentation
+name,role,department,language,notes
+Antonio Sgorbissa,Professor / Principal Investigator,DIBRIS — Sgorbissa group,en,Head of the social-robotics lab; contact for OmniLLM and CARESSES-heritage studies.
+Akshita,Visiting researcher (project author),DIBRIS — Sgorbissa group,en,Author and pilot subject of the OmniLLM Embodied LLM Arena study.
+DIBRIS PhD student,PhD student,DIBRIS — Robotics and Autonomous Systems,en,Generic profile for a robotics PhD student visitor.
+DIBRIS Master student,Master student,DIBRIS — Robotics Engineering joint master,en,Generic profile for a Robotics Engineering joint master student.
+Italian visitor,Member of the public,Visitor,it,Generic profile for an Italian-speaking visitor (T4 multilingual).
+Spanish visitor,Member of the public,Visitor,es,Generic profile for a Spanish-speaking visitor (T4 multilingual).
+French visitor,Member of the public,Visitor,fr,Generic profile for a French-speaking visitor (T4 multilingual).

@@ -246,6 +246,26 @@ def create_app(
         graph = _get_graph()
 
         if graph is not None and rag is not None:
+            # Resolve the per-condition model BEFORE invoking the graph so
+            # that Condition B (fixed local Llama) actually exercises the
+            # local Ollama backend rather than silently falling through to
+            # the server's default cloud model.  Smart-routed conditions
+            # (C / D) keep the default here; their downstream nodes pick
+            # the real model later.
+            from omnillm.hri.experiment import (
+                CONDITION_CONFIGS,
+                ExperimentCondition,
+            )
+            try:
+                cond_enum = ExperimentCondition(condition)
+                cond_cfg = CONDITION_CONFIGS.get(cond_enum)
+                effective_model = (
+                    cond_cfg.model_id if cond_cfg and cond_cfg.model_id
+                    else _default_model
+                )
+            except ValueError:
+                effective_model = _default_model
+
             # Full LangGraph pipeline
             state: dict[str, Any] = {
                 "utterance": utterance,
@@ -254,7 +274,7 @@ def create_app(
                 "session_id": session_id,
                 "condition": condition,
                 "rag_enabled": rag_enabled,
-                "model_id": _default_model,
+                "model_id": effective_model,
             }
             try:
                 result = _run_async(graph.ainvoke(state))
@@ -407,7 +427,8 @@ def _fallback_interact(
         return jsonify({"error": "Could not transcribe audio"}), 500
 
     system_prompt = (
-        "You are Pepper, a helpful social robot in the IRAI Lab. "
+        "You are Pepper, a helpful social robot in the Sgorbissa HRI lab at "
+        "DIBRIS, University of Genoa. "
         "Answer concisely (2–4 sentences)."
     )
     messages = [

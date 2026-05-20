@@ -184,12 +184,18 @@ def _make_classify_task_node():
 
 
 def _make_rag_node(rag: "RAGPipeline"):
-    """Create the RAG Pipeline node (T1 — Info Retrieval)."""
+    """Create the RAG Pipeline node (T1 — Info Retrieval).
+
+    Honours ``state["model_id"]`` when set so per-condition routing (e.g.
+    Condition B → ``llama3-8b-local``) actually drives the LLM used for the
+    grounded answer, not just the gateway-default cloud model.
+    """
     async def run_rag(state: dict[str, Any]) -> dict[str, Any]:
         utterance = state.get("utterance", "")
+        target_model = state.get("model_id") or None
 
         try:
-            rag_resp = await rag.query(utterance)
+            rag_resp = await rag.query(utterance, model_id=target_model)
             chunks_text = "\n\n".join(
                 f"[{c.source}]: {c.text}" for c in rag_resp.retrieved_chunks
             )
@@ -208,12 +214,16 @@ def _make_rag_node(rag: "RAGPipeline"):
 
 
 def _make_nav_rag_node(rag: "RAGPipeline"):
-    """Create the Navigation + Gesture Planner node (T2 — Navigation)."""
+    """Create the Navigation + Gesture Planner node (T2 — Navigation).
+
+    Same per-condition model override as :func:`_make_rag_node`.
+    """
     async def run_nav_rag(state: dict[str, Any]) -> dict[str, Any]:
         utterance = state.get("utterance", "")
+        target_model = state.get("model_id") or None
 
         try:
-            rag_resp = await rag.query(utterance)
+            rag_resp = await rag.query(utterance, model_id=target_model)
             chunks_text = "\n\n".join(
                 f"[{c.source}]: {c.text}" for c in rag_resp.retrieved_chunks
             )
@@ -245,7 +255,8 @@ def _make_direct_llm_node(gateway: "LLMGateway", model_id: str):
         target_model = state.get("model_id") or model_id
 
         system_prompt = (
-            "You are Pepper, a friendly social robot in the IRAI Lab. "
+            "You are Pepper, a friendly social robot in the Sgorbissa HRI lab "
+            "at DIBRIS, University of Genoa. "
             "Respond warmly, naturally, and concisely (1–3 sentences). "
             "You are helpful, curious, and slightly playful."
         )
@@ -280,19 +291,25 @@ def _make_direct_llm_node(gateway: "LLMGateway", model_id: str):
 
 
 def _make_multilingual_llm_node(gateway: "LLMGateway"):
-    """Create the Language-Optimal LLM node (T4 — Multilingual)."""
+    """Create the Language-Optimal LLM node (T4 — Multilingual).
+
+    Tries the language-optimal model first (claude-haiku for non-English).
+    If that model returns an error (e.g. transient overload from the
+    provider), retries once with ``openai-gpt4o-mini`` while keeping the
+    multilingual system prompt, so the T4 treatment is preserved instead of
+    silently degrading to the no-language fallback handler in app.py.
+    """
     async def multilingual_llm(state: dict[str, Any]) -> dict[str, Any]:
         utterance = state.get("utterance", "")
-        language = state.get("detected_language", "en")
 
-        # Route to best multilingual model based on language
         from omnillm.hri.language_detector import LanguageDetector
         detector = LanguageDetector()
         lang_result = detector.detect(utterance)
         target_model = lang_result.recommended_model or "openai-gpt4o-mini"
 
         system_prompt = (
-            f"You are Pepper, a friendly social robot. The user is speaking "
+            f"You are Pepper, a friendly social robot in the Sgorbissa HRI lab "
+            f"at DIBRIS, University of Genoa. The user is speaking "
             f"{lang_result.language_name}. Respond in {lang_result.language_name}. "
             f"Keep your response brief and friendly (1–3 sentences)."
         )
@@ -301,27 +318,42 @@ def _make_multilingual_llm_node(gateway: "LLMGateway"):
             {"role": "user", "content": utterance},
         ]
 
-        try:
-            resp = await gateway.query(target_model, messages, temperature=0.7)
-            if resp.is_error:
-                return {"error": resp.error}
+        backup_model = "openai-gpt4o-mini"
+        models_tried: list[str] = []
+        last_error: str | None = None
+        resp = None
+        for model in (target_model, backup_model):
+            if model in models_tried:
+                continue
+            models_tried.append(model)
+            try:
+                resp = await gateway.query(model, messages, temperature=0.7)
+            except Exception as exc:
+                last_error = f"{model}: {exc}"
+                resp = None
+                continue
+            if not resp.is_error:
+                break
+            last_error = f"{model}: {resp.error}"
+            resp = None
 
-            from omnillm.robotics.gesture_planner import GesturePlanner
-            planner = GesturePlanner()
-            gesture, led = planner.plan("multilingual", resp.content)
+        if resp is None:
+            return {"error": f"Multilingual LLM failed: {last_error}"}
 
-            return {
-                "response_text": resp.content,
-                "model_id": resp.model_id,
-                "input_tokens": resp.input_tokens,
-                "output_tokens": resp.output_tokens,
-                "cost_usd": resp.cost_usd,
-                "latency_ms": resp.latency_ms,
-                "gesture": gesture,
-                "led_color": led,
-            }
-        except Exception as exc:
-            return {"error": f"Multilingual LLM failed: {exc}"}
+        from omnillm.robotics.gesture_planner import GesturePlanner
+        planner = GesturePlanner()
+        gesture, led = planner.plan("multilingual", resp.content)
+
+        return {
+            "response_text": resp.content,
+            "model_id": resp.model_id,
+            "input_tokens": resp.input_tokens,
+            "output_tokens": resp.output_tokens,
+            "cost_usd": resp.cost_usd,
+            "latency_ms": resp.latency_ms,
+            "gesture": gesture,
+            "led_color": led,
+        }
 
     return multilingual_llm
 
