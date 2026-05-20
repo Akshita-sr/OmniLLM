@@ -337,6 +337,8 @@ def create_app(
             logger.exception("Failed to log questionnaire data")
             return jsonify({"error": "Failed to record questionnaire data. Check server logs."}), 500
 
+        return jsonify({"status": "ok", "session_id": data["session_id"]})
+
     @app.route("/export", methods=["GET"])
     def export_data() -> Any:
         """Export all logged interaction data as JSON."""
