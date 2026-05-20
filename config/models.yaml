@@ -1,16 +1,6 @@
 models:
   # ─── Cloud Models ──────────────────────────────────────────────────────────
 
-  openai-gpt54:
-   id: openai-gpt54
-   provider: openai
-   model: gpt-5.4
-   api_key_env: OPENAI_API_KEY
-   cost_per_1m_input: 2.50
-   cost_per_1m_output: 15.00
-   type: cloud
-   description: "OpenAI GPT-5.4 — frontier model for complex professional work"
-
   openai-gpt4o:
     id: openai-gpt4o
     provider: openai
@@ -164,23 +154,23 @@ models:
   llama3-8b-local:
     id: llama3-8b-local
     provider: ollama
-    model: llama3:8b
+    model: llama3.2:3b
     api_base: http://localhost:11434
     cost_per_1m_input: 0.00
     cost_per_1m_output: 0.00
     type: local
-    description: "Meta Llama3 8B — local HRI baseline via Ollama"
+    description: "Meta Llama 3.2 3B — local HRI baseline via Ollama (3B model kept under the legacy 'llama3-8b-local' ID for backward compatibility with condition B)"
     hri_strengths: ["social_conversation", "info_retrieval"]
 
-  qwen-2.5-7b-local:
-    id: qwen-2.5-7b-local
+  qwen3-8b-local:
+    id: qwen3-8b-local
     provider: ollama
-    model: qwen2.5:7b
+    model: qwen3:8b
     api_base: http://localhost:11434
     cost_per_1m_input: 0.00
     cost_per_1m_output: 0.00
     type: local
-    description: "Alibaba Qwen2.5 7B — multilingual local model via Ollama"
+    description: "Alibaba Qwen3 8B — multilingual local model via Ollama"
     hri_strengths: ["multilingual", "info_retrieval"]
 
   qwen-2.5-local:
