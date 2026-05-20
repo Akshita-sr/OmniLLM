@@ -12,7 +12,11 @@ from omnillm.robotics.bridge import (
     parse_llm_to_action,
     parse_nav2_goal,
 )
-from omnillm.robotics.pepper import PepperBridge
+from omnillm.robotics.pepper import (
+    PepperBridge,
+    discover_choregraphe_port,
+    make_pepper_bridge,
+)
 from omnillm.robotics.gesture_planner import GesturePlanner
 
 __all__ = [
@@ -22,5 +26,7 @@ __all__ = [
     "parse_llm_to_action",
     "parse_nav2_goal",
     "PepperBridge",
+    "discover_choregraphe_port",
+    "make_pepper_bridge",
     "GesturePlanner",
 ]
