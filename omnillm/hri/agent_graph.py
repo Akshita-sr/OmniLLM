@@ -389,7 +389,7 @@ def _make_smart_router_node(gateway: "LLMGateway"):
                 )
 
                 system_prompt = (
-                    "You are Pepper, a helpful social robot in the IRAI Lab. "
+                    "You are Pepper, a helpful social robot in the DIBRIS Lab. "
                     "Answer concisely (2–4 sentences). Use the context if relevant."
                 )
                 if rag_context:
@@ -416,7 +416,7 @@ def _make_smart_router_node(gateway: "LLMGateway"):
                 )
                 target = decision.model_id
                 system_prompt = (
-                    "You are Pepper, a helpful social robot in the IRAI Lab. "
+                    "You are Pepper, a helpful social robot in the DIBRIS Lab. "
                     "Answer concisely (2–4 sentences). Use the context if relevant."
                 )
                 if rag_context:
