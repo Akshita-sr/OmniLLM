@@ -4992,6 +4992,575 @@ curl<span style="color: #BBB"> </span>http://localhost:5000/export<span style="c
 expected for the chosen condition.</p>
 <div class='pageBreak'></div>
 
+<h2 id="chapter-27a-external-resources-community-insights-and-future-directions">Chapter 27A — External Resources, Community Insights, and Future Directions</h2>
+<blockquote>
+<p>*** AT A GLANCE.<em><em> This chapter does not introduce new OmniLLM code. It
+reads the broader Pepper + LLM community — SoftBank's own labs,
+independent research teams (Auckland, Sweden, Italy, Czech Republic),
+open-source navigation/perception samples, deprecated-but-essential
+SDK mirrors, Japanese-voice synthesis options, and HRI evaluation
+curricula — and maps each resource to a </em>specific problem you will
+hit, or have already hit, with the real robot</em>. Treat it as the
+"what to read next" appendix for Part IV.</p>
+</blockquote>
+<h3 id="27a1-how-to-use-this-chapter">27A.1  How to use this chapter</h3>
+<p>The links collected here fall into seven recurring problem buckets that
+every Pepper + LLM project meets sooner or later. Each section below is
+organised the same way:</p>
+<ol>
+<li><strong>The problem</strong> — what concrete pain point this group of resources
+   addresses (drawn from OmniLLM's own history, the project setup
+   notes, and the "Pepper + Windows 11 quirks" memory).</li>
+<li><strong>What the community has already published</strong> — the repository or
+   paper, what it actually contains (not just the title), and the
+   licence/maintenance status.</li>
+<li><strong>How to fold it into OmniLLM</strong> — concrete file paths, integration
+   sketches, or experiment ideas you can act on without re-architecting
+   the project.</li>
+</ol>
+<p>Where a resource is <em>only</em> useful as a reference (no code reuse), it
+appears in the final annotated list in §27A.10 rather than as a section
+of its own.</p>
+<h3 id="27a2-sibling-http-bridge-projects-cross-validation-of-omnillms-pattern-1">27A.2  Sibling HTTP-Bridge Projects — Cross-Validation of OmniLLM's Pattern 1</h3>
+<p>Chapter 26 chose Pattern 1 (HTTP/REST bridge between Python 2.7 NAOqi
+and Python 3.11+ AI) by surveying the literature. Five independent
+public projects use the same pattern. Reading their READMEs is the
+fastest way to <em>cross-check</em> OmniLLM's architecture and spot ideas it
+has not yet adopted.</p>
+<table>
+<thead>
+<tr>
+<th>Project</th>
+<th>Stack</th>
+<th>What OmniLLM can borrow</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>ilabsweden/pepperchat</strong></td>
+<td>Py2 <code>module_commandable.py</code> on robot, Py3 <code>dispatcher.py</code> external, OpenAI ChatGPT</td>
+<td>Uses NAOqi <code>Autonomous Life Proxy</code> to switch focus to a dedicated <code>nao_focus</code> — <em>prevents Pepper's built-in dialogue from talking over your LLM</em>. OmniLLM does not currently set Autonomous Life mode; the participant may hear Pepper's stock greeting drowning the LLM response.</td>
+</tr>
+<tr>
+<td><strong>UoA-CARES/Pepper-GPT</strong></td>
+<td>Py3 "Black Box" (Whisper + GPT-3.5), Py2 "Pepper Controller" over VPN, NAOqi 2.1.4.13</td>
+<td>Documents the <code>libboost_regex</code> install error explicitly — the same family of errors hits the Windows 11 pynaoqi install. Their pinning of NAOqi 2.1.4.13 confirms our 2.5.5.5 choice is <em>not</em> the only valid path.</td>
+</tr>
+<tr>
+<td><strong>UoA-CARES/pepper-demo</strong></td>
+<td>Choregraphe 2.5.10.7 + PyNAOqi, Pepper 1.8</td>
+<td>Documents a hard-to-find ZLIB symlink fix (<code>libz.so.1</code> ↔ system) for Choregraphe on Linux. Save this for the day you move the AI server to a Linux box.</td>
+</tr>
+<tr>
+<td><strong>igor-lirussi/Dialogue-Pepper-Robot</strong></td>
+<td>Java AIML engine + Py2 NAOqi + separate speech-recognition service</td>
+<td>The clean split between <em>dialogue engine</em> and <em>speech-recognition service</em> (parallel processes, robot IP as a CLI flag) is what OmniLLM already does, but they expose it as a hard architectural rule. Worth citing in Part X when you defend the pipeline.</td>
+</tr>
+<tr>
+<td><strong>softbankroboticstraining/pepper-chatbot-api</strong> ("Pepper Chat")</td>
+<td>NAOqi 2.5 + Google Dialogflow v2 (JSON keypath)</td>
+<td>Documents <em>QiChat voice-shaping commands</em> (pause, speed, pitch, emotional intonation) that OmniLLM does not yet exercise. These could be added to <code>naoqi_client.py</code>'s <code>say()</code> wrapper for affective speech without leaving Pepper's TTS.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Direct cross-validation finding.</strong> Every one of the five projects
+ends up with the exact same two-process topology OmniLLM uses. The
+<em>variation</em> is in (a) which Python 3-side LLM provider they use, and
+(b) whether they let Pepper's Autonomous Life keep its default
+behaviour or suppress it. OmniLLM is competitive on (a) — its
+multi-provider router covers ground none of the others touch — and
+<em>behind</em> on (b). The fix is one NAOqi call (<code>ALAutonomousLife.setState("disabled")</code>)
+inside <code>naoqi_client.py</code> after connection and before the greeting.</p>
+<h3 id="27a3-naoqi-25-python-27-install-hardening-community-recipes">27A.3  NAOqi 2.5 / Python 2.7 Install Hardening — Community Recipes</h3>
+<p>The single biggest source of lost hours on Windows 11 has been the
+pynaoqi install path. Three community resources fill the gaps the
+official Aldebaran docs leave open:</p>
+<p><strong>(a) <code>AnonKour/pynaoqi</code></strong> — A community mirror of "the Python 2.7
+NAOqi SDK", explicitly published because the official Aldebaran
+distribution is hard to reach since the bankruptcy. The README
+documents the exact <code>.bashrc</code> lines to add:</p>
+<div class="codehilite" style="background: #f0f0f0"><pre style="line-height: 125%;"><span></span><code><span style="color: #007020; font-weight: bold">export</span><span style="color: #BBB"> </span>PYTHONPATH<span style="color: #666">=$</span>{PYTHONPATH}:<span style="color: #666">/</span>installation<span style="color: #666">/</span>path<span style="color: #666">/</span>pynaoqi<span style="color: #666">/</span>
+</code></pre></div>
+
+<p>The repo is Linux-only (compiled <code>.so</code> files), so it is <strong>not a
+substitute</strong> for the Windows install we have at
+<code>C:\pynaoqi\pynaoqi-python2.7-2.5.5.5-win32-vs2013\</code>. But if a future
+collaborator runs the NAOqi client from a Linux box (recommended for
+ROS interop — see 27A.4), this is the easiest source.</p>
+<p><strong>(b) <code>nlp.fi.muni.cz/trac/pepper/wiki/InstallationInstructions</code></strong> —
+The Masaryk University NLP lab's installation guide. Two pieces of
+information are not in the official docs:</p>
+<ul>
+<li>A <code>pyenv_install.sh</code> script that builds Python 2 locally and drops
+  pynaoqi into its <code>site-packages</code>. This is the cleanest way to keep
+  a Python 2 install isolated from system Python without
+  <code>conda</code>/<code>anaconda</code> (which is explicitly broken with NAOqi — confirmed
+  also by the Dialogflow Medium article).</li>
+<li>The Choregraphe-on-Linux dependency list: <code>libgl-dev libxt6 libxaw7</code>.</li>
+</ul>
+<p><strong>(c) <code>incognite-lab/Pepper-Controller</code></strong> — Wraps ~60 NAOqi methods
+into a single <code>Pepper</code> class organised by domain (Language, Vision,
+Motorics, System). OmniLLM's <code>naoqi_client.py</code> is more focused (it is
+a <em>client</em>, not a <em>controller</em>) but the domain partitioning is a
+better organisation than our current flat module. <strong>Concrete
+refactor idea</strong>: split <code>naoqi_client.py</code> into
+<code>naoqi_client/language.py</code>, <code>naoqi_client/motion.py</code>,
+<code>naoqi_client/vision.py</code>, <code>naoqi_client/system.py</code>, keeping the public
+HTTP surface unchanged. The Pepper-Controller code is BSD-licensed and
+can be vendored.</p>
+<p><strong>Windows 11 specifics.</strong> None of the three resources above are
+Windows-first. The closest community-validated Windows install path is
+still through Maxtronics (the new IP owner) — see §27A.10 — but their
+KB does not yet duplicate the Aldebaran developer guide. <em>Conclusion:</em>
+the project setup memory's notes (loopback bug workaround, virtual
+robot port, Connect-to gotcha) are still the canonical Windows 11
+record. Worth publishing them as a gist before they are lost.</p>
+<h3 id="27a4-navigation-proactive-mobility-and-guided-tour-ideas">27A.4  Navigation, Proactive Mobility, and Guided-Tour Ideas</h3>
+<p>OmniLLM's current scope (Embodied LLM Arena) treats navigation as a
+<em>spoken</em> directive — "Room 305 is on your left" — without Pepper
+actually moving. Three SoftBank-Labs repositories show what could be
+added without rewriting the agent:</p>
+<p><strong>(a) <code>softbankrobotics-labs/pepper-proactive-mobility</code></strong> — Pepper
+autonomously approaches people in range and returns "home" when no one
+is present. Supports <strong>three localisation modes</strong>: the charging-station
+homing built into NAOqi, ARUCO printed-marker localisation
+(linoleum/vinyl ≤ 2 mm thick — <em>important</em> if you want a low-friction
+floor in a lab), and on-board SLAM. The codebase is 94.9 % Python,
+which means it is readable from the OmniLLM side rather than a black
+box.</p>
+<p><strong>(b) <code>softbankrobotics-labs/pepper-aruco</code> and <code>pepper-aruco-automapping</code></strong>
+— ARUCO marker library exposed through QiSDK. Markers act as named
+frames the robot can localise against. For an Embodied LLM Arena task,
+print one marker per "room" and the agent can speak <em>and walk</em> to
+"Room 305".</p>
+<p><strong>(c) <code>aldebaran/naoqi_navigation_samples</code></strong> — Choregraphe <code>.pml</code>
+projects for <code>explore</code>, <code>patrol</code>, and <code>places</code>. <code>places</code> is the most
+directly useful — it stores named locations and walks between them.
+Open in Choregraphe 2.5.2+, upload to Pepper, and trigger from
+OmniLLM via <code>ALBehaviorManager.runBehavior("places/goto_room_305")</code>,
+mirroring the <code>GESTURE_TO_BEHAVIOR</code> dictionary pattern in
+<code>naoqi_client.py</code>.</p>
+<p><strong>Concrete extension proposal — "OmniLLM Wayfinder" condition.</strong> Add
+a fourth experimental condition D to the Arena where the LLM's
+response includes a <code>target_location</code> field (e.g. <code>"room_305"</code>), the
+gesture planner maps that to a <code>places/*</code> Choregraphe behaviour, and
+Pepper <em>escorts</em> the participant instead of merely pointing. Latency
+budget is unchanged (the walk is async); the existing eye-LED
+"navigation blue" already signals the mode. The ROBO-GAP findings on
+robot age/gender perception (§27A.8) become an additional dependent
+variable: does an escorting robot read as older/more authoritative
+than a pointing one?</p>
+<p><strong>On the ROS side.</strong> <code>ros-naoqi/naoqi_bridge</code> (and <code>naoqi_driver2</code>
+for ROS 2) republishes NAOqi services as ROS topics. The bridge is
+worth the setup cost the moment you want to integrate with <strong>Nav2</strong>
+or any standard ROS perception stack. The compass research already
+catalogued this as bridge Pattern 3; the live repository confirms
+ROS 1 Noetic and ROS 2 Foxy/Humble are the realistic targets.</p>
+<h3 id="27a5-multilingual-voice-the-japanese-voice-question">27A.5  Multilingual Voice — The Japanese-Voice Question</h3>
+<p>OmniLLM has a language detector that recommends a model per detected
+language (the recent <code>language_code</code> / <code>recommended_model</code> compat
+properties). For research participants who code-switch into Japanese,
+the robot is currently bottlenecked at NAOqi's stock <code>nao_jpf</code> voice
+— a 2014-era diphone voice that sounds noticeably worse than modern
+Japanese TTS. Two resources clarify the realistic options:</p>
+<p><strong>(a) Voisona Pepper voice library (<code>voisona.com/song/artist/pepper_ja_JP</code>)</strong>
+— A <em>singing-voice</em> library trained on the same Pepper character,
+sold commercially through DLsite/Amazon/Sonicwire. The vocal range
+(A3–C#5) and tempo (80–120 BPM) make this a poor fit for
+conversational TTS. <strong>Verdict: not usable for the Arena.</strong> It is
+useful only if you build a "Pepper sings" demo for outreach.</p>
+<p><strong>(b) CeVIO (Wikipedia article)</strong> — The underlying engine behind
+Voisona, HTS-HMM based (same family as Sinsy / Open J-Talk). CeVIO
+itself is Japanese-only and Windows-only. <strong>A better path</strong> for
+conversational Japanese on Pepper is the open-source toolchain that
+shares CeVIO's lineage: <strong>Open JTalk + HTS voices</strong> (server-side,
+generate <code>.wav</code>, send to Pepper through <code>ALAudioPlayer</code>) or <strong>VOICEVOX</strong>
+(MIT-licensed, modern neural TTS for Japanese, runs locally on the
+same GPU you use for Whisper). VOICEVOX is the most practical 2026
+choice and slots into the existing TTS abstraction in
+<code>omnillm/server/</code>.</p>
+<p><strong>Concrete refactor proposal.</strong> Introduce a <code>tts/</code> provider directory
+mirroring <code>omnillm/server/providers/</code>. The current default
+(NAOqi <code>ALAnimatedSpeech</code>) becomes <code>tts/naoqi.py</code>; add <code>tts/voicevox.py</code>
+that synthesises Japanese to a 16 kHz WAV and ships it back in the
+<code>/interact</code> JSON as <code>speech_audio_b64</code>. The NAOqi client plays it via
+<code>ALAudioPlayer.playFile()</code>. Body language is lost in this path —
+<code>ALAnimatedSpeech</code> requires synthesised speech to come from its own
+engine — so use it only when the language detector chooses Japanese.</p>
+<h3 id="27a6-vision-side-upgrades-face-emotion-mask">27A.6  Vision-Side Upgrades — Face, Emotion, Mask</h3>
+<p>OmniLLM does not currently consume Pepper's two 5 MP cameras or the
+Xtion depth sensor (Chapter 23.2 notes this explicitly). Three
+mature open-source pieces would change that without leaving the
+existing HTTP-bridge architecture:</p>
+<p><strong>(a) <code>ageitgey/face_recognition</code></strong> — dlib-based, 99.38 % on LFW.
+Python 3 only, runs comfortably on the AI-server side. Add a
+<code>/recognise_face</code> endpoint that accepts a JPEG from the NAOqi
+client (captured via <code>ALVideoDevice.getImageRemote()</code>) and returns a
+participant ID. Two research uses:</p>
+<ul>
+<li><strong>Personalised greetings</strong> — the agent remembers a returning
+  participant and adapts its register.</li>
+<li><strong>Automatic session-ID assignment</strong> — <code>participant_id</code> is currently
+  passed as a CLI flag, error-prone in a live study. Face recognition
+  removes the source of that error.</li>
+</ul>
+<p><strong>(b) <code>LucaCorvitto/Emotional_Pepper</code></strong> — Mixes Python (44.8 %), web
+UI (42.6 %), and <strong>PDDL planning (12.6 %)</strong>. The PDDL piece is the
+interesting one for OmniLLM: it shows a planner driving Pepper's
+"mood" through a structured world model rather than freeform LLM
+output. <strong>Hybrid idea:</strong> keep the LLM as the <em>content</em> generator, but
+gate gesture/LED selection through a small PDDL plan when the agent
+needs to maintain a persistent emotional arc across an interaction
+(a known weakness of pure LLM-driven gesture mapping). Their report
+PDF is worth pulling for Part X / thesis design.</p>
+<p><strong>(c) <code>softbankrobotics-labs/pepper-mask-detection</code> and
+<code>pepper-deep-learning</code></strong> — QiSDK libraries (Kotlin/C++), targeting
+NAOqi 2.9 + Android tablet. They confirm what Chapter 23.7 warned:
+<em>new</em> perception work in the SoftBank-Labs org is <strong>NAOqi 2.9 only</strong>.
+If OmniLLM ever migrates to NAOqi 2.9, the SDK split (Kotlin on the
+robot, Python on the server) becomes mandatory; bridge Pattern 5
+(WebSocket) is the natural choice there, not the current REST.</p>
+<p><strong>Additional finding from <code>arxiv.org/abs/2401.17663</code></strong> ("Social
+Robot Navigation with Adaptive Proxemics Based on Emotions", Bilen
+et al., 2024) — not a Pepper-LLM paper, but it provides experimental
+evidence that <em>proxemic distance</em> should change with detected
+emotion (angry participants want more space; happy ones don't want
+less). If §27A.4's "OmniLLM Wayfinder" extension is built, the same
+emotion signal could feed the approach-distance parameter.</p>
+<h3 id="27a7-dialogue-platforms-that-came-before-llms">27A.7  Dialogue Platforms That Came Before LLMs</h3>
+<p>Several listed resources predate the LLM era. They are <em>not</em>
+substitutes for OmniLLM's stack but they teach important lessons:</p>
+<p><strong>(a) Pepper + Dialogflow integration (Medium article by
+blogemtech)</strong> — Architecture: Pepper's microphone streams into a
+custom <code>SoundProcessingModule</code> (ALModule subclass) with silence
+detection, then to Dialogflow's <code>detectIntent</code> API. Three concrete
+takeaways:</p>
+<ol>
+<li><strong>Silence detection is essential</strong> — without it Pepper streams
+   constantly and you exhaust API quota. OmniLLM's current
+   <code>ALAudioDevice.subscribe()</code> loop in <code>naoqi_client.py</code> does <strong>not</strong>
+   do silence detection; it relies on a fixed 5-second window.
+   For longer interactions, port the article's amplitude-threshold
+   peak detector (test threshold = 14 000 on 16 kHz mono).</li>
+<li><strong>Pepper's onboard ASR is unreliable for proper nouns</strong> — "Bob"
+   reliably mis-recognised as "Paul" despite training. This is why
+   OmniLLM uses Whisper. Worth citing in defence of the design
+   choice.</li>
+<li><strong>Anaconda is incompatible with NAOqi SDK.</strong> Use system Python 2.7
+   or <code>pyenv</code>. (Matches the memory note.)</li>
+</ol>
+<p><strong>(b) <code>TheRARELab/langex</code></strong> — <em>Not</em> an LLM project. A Choregraphe
+template for reproducible language-HRI experiments: configurable
+"Factor 1/2/3" conditions, dialogue in <code>.txt</code> files per condition,
+auto-logged filenames with the experimental parameters baked in.
+Three direct ideas for OmniLLM's experiment runner:</p>
+<ul>
+<li><strong>Filename convention</strong> — embed condition, participant, model in
+  the log filename so a folder listing is self-describing.</li>
+<li><strong><code>type 'next'</code> advancement</strong> — for pilot studies where you want
+  to control utterance pacing manually before opening to real-time
+  audio.</li>
+<li><strong>Reproducibility headers</strong> — every log file starts with a header
+  block recording all experimental parameters. OmniLLM already
+  exports JSON; consider adding a <code>metadata</code> block matching langex's
+  format.</li>
+</ul>
+<p><strong>(c) <code>softbankrobotics-labs</code> org generally</strong> — <code>pepper-app-launcher</code>,
+<code>pepper-gamepad</code>, <code>pepper-solitaries-loop</code>. The "solitaries loop"
+(idle animations) is the resource most relevant to OmniLLM: between
+participant turns, Pepper currently goes still — uncanny in a
+long study. A small subscribed loop that triggers <code>pepper-solitaries</code>
+animations during idle would improve perceived liveliness without
+touching the agent.</p>
+<h3 id="27a8-validation-suites-curricula-and-hri-reference-datasets">27A.8  Validation Suites, Curricula, and HRI Reference Datasets</h3>
+<p>For thesis-grade validity arguments (see Part X), the following
+external resources let you defend the experimental design without
+re-justifying every choice:</p>
+<p><strong>(a) <code>robocupathomeedu.org/learn/online-classroom/online-challenge-2022</code></strong>
+— Page would not load during research, but the broader RoboCup@Home
+Education curriculum is the standard set of tasks (person following,
+object handover, spoken instruction following, navigation between
+rooms) that a service robot is expected to handle. Use this list as
+the <em>external rubric</em> against which to claim OmniLLM coverage in
+Part X. Of the standard tasks, OmniLLM currently covers spoken
+instruction following and grounded answering; navigation and
+person-following are unlocked by §27A.4.</p>
+<p><strong>(b) <code>sunzhida/COMP4461_2017Fall_Lab4</code></strong> — HKUST HCI course lab on
+Pepper. The exercise (<code>expression_teller.py</code>) is a one-file demo of
+face detection + gender + expression classification through NAOqi's
+on-board modules. Two uses for the thesis:</p>
+<ul>
+<li><strong>Baseline implementation</strong> to compare LLM-driven emotional
+  response against an ALMemory-event-driven baseline.</li>
+<li><strong>Pedagogical citation</strong> when arguing OmniLLM is approachable for a
+  graduate course (Part XI is already pitched this way).</li>
+</ul>
+<p><strong>(c) <code>robo-gap.unisi.it</code></strong> (Perugia et al., 2022, HRI ACM/IEEE) —
+A peer-reviewed dataset of perceived age, femininity, masculinity,
+and gender-neutrality across 251 robots, including Pepper. The
+dataset is downloadable as CSV with ICC reliability between .896 and
+.954. <strong>Concrete use in OmniLLM's thesis:</strong> as a control variable.
+When reporting results, cite ROBO-GAP's published Pepper ratings so
+the reader knows <em>what perception baseline</em> the participants are
+walking in with. This is the kind of small move that hardens an HRI
+paper against reviewer pushback.</p>
+<p><strong>(d) CARESSES (<code>caressesrobot.org</code>)</strong> — Pepper used for <em>culturally
+competent</em> elder care across UK / Japan / India. The web server was
+unreachable during research; the publications stack (search "Bruno",
+"Sgorbissa", "CARESSES" on Google Scholar) is the relevant entry
+point. Important for Part X if you want to position OmniLLM as a
+cultural-HRI platform rather than a generic chatbot.</p>
+<h3 id="27a9-future-directions-unlocked-by-these-resources">27A.9  Future Directions Unlocked by These Resources</h3>
+<p>Ranked by ease and research payoff, drawing only on what the
+resources above actually demonstrate:</p>
+<table>
+<thead>
+<tr>
+<th>Idea</th>
+<th>Effort</th>
+<th>Research payoff</th>
+<th>Hooks into</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Disable Autonomous Life on connect (kill stock dialogue)</td>
+<td>1 line in <code>naoqi_client.py</code></td>
+<td>Removes a confound that all five sibling projects have already fixed</td>
+<td>§27A.2</td>
+</tr>
+<tr>
+<td>Add solitaries / idle animations loop</td>
+<td>~30 LoC</td>
+<td>Perceived liveliness during long sessions</td>
+<td>§27A.7</td>
+</tr>
+<tr>
+<td>Silence-detected audio capture (replace fixed 5 s window)</td>
+<td>~80 LoC</td>
+<td>Lets the participant pause/think without truncation</td>
+<td>§27A.7</td>
+</tr>
+<tr>
+<td>VOICEVOX Japanese TTS provider</td>
+<td>new <code>tts/voicevox.py</code> provider</td>
+<td>Unlocks Japanese-language Arena condition with modern voice</td>
+<td>§27A.5</td>
+</tr>
+<tr>
+<td>ALAutonomous-style face memory via <code>ageitgey/face_recognition</code></td>
+<td>new <code>/recognise_face</code> endpoint</td>
+<td>Eliminates manual participant-ID entry; enables personalised greeting</td>
+<td>§27A.6</td>
+</tr>
+<tr>
+<td>ARUCO + <code>places/</code> navigation as new condition D</td>
+<td>new condition + 4 Choregraphe behaviours</td>
+<td>Tests escorting vs. pointing — novel HRI finding</td>
+<td>§27A.4</td>
+</tr>
+<tr>
+<td>ROS 2 bridge via <code>naoqi_driver2</code></td>
+<td>new <code>naoqi_client_ros2/</code> package</td>
+<td>Opens fleet / multi-robot experiments</td>
+<td>§27A.4</td>
+</tr>
+<tr>
+<td>Migration to NAOqi 2.9 + QiSDK (Kotlin)</td>
+<td>full rewrite of robot side</td>
+<td>Future-proofs the project against pynaoqi rot</td>
+<td>§27A.6</td>
+</tr>
+</tbody>
+</table>
+<p>The first three rows are quick wins worth doing before the next
+participant cohort. Rows 4–6 are dissertation-chapter scale. Rows 7–8
+are post-thesis directions.</p>
+<h3 id="27a10-annotated-resource-list">27A.10  Annotated Resource List</h3>
+<p>Resources that did not get a dedicated subsection above, plus pointers
+back to the ones that did, with one-line "why it matters" notes:</p>
+<table>
+<thead>
+<tr>
+<th>Resource</th>
+<th>Why it matters for OmniLLM</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>caressesrobot.org/en/category/research/</code></td>
+<td>Pepper for culturally competent elder care — cite for cultural-HRI framing of the thesis</td>
+</tr>
+<tr>
+<td><code>voisona.com/song/artist/pepper_ja_JP</code></td>
+<td>Singing-voice library; <em>not</em> viable for conversational TTS, only for outreach demos</td>
+</tr>
+<tr>
+<td><code>en.wikipedia.org/wiki/CeVIO</code></td>
+<td>Background on the HTS-HMM family; points you toward VOICEVOX as the practical successor</td>
+</tr>
+<tr>
+<td><code>blogemtech.medium.com/pepper-integration-with-dialogflow-...</code></td>
+<td>Silence-detection + amplitude-threshold recipes for <code>naoqi_client.py</code></td>
+</tr>
+<tr>
+<td><code>robots.ros.org/pepper/</code></td>
+<td>High-level pointer into the <code>naoqi_bridge</code> ROS packages</td>
+</tr>
+<tr>
+<td><code>doc.aldebaran.com/1-14/...</code> and <code>doc.aldebaran.com/2-5/...</code></td>
+<td>The canonical NAOqi reference; bookmark Service Pages (<code>ALMotion</code>, <code>ALAnimatedSpeech</code>, <code>ALMemory</code>, <code>ALAudioDevice</code>)</td>
+</tr>
+<tr>
+<td><code>maxtronics.com/en/support/kb/</code> and <code>.../category/pepper/...</code></td>
+<td>Post-bankruptcy mirror of Pepper 2.5 and 2.9 downloads (firmware, Choregraphe, SDK)</td>
+</tr>
+<tr>
+<td><code>stackoverflow.com/questions/tagged/pepper</code></td>
+<td>First-stop for one-off NAOqi/Choregraphe errors; <em>not</em> an answer source for architectural questions</td>
+</tr>
+<tr>
+<td><code>github.com/TheRARELab/langex</code></td>
+<td>Reproducible language-HRI experiment template — borrow its log-filename and header conventions</td>
+</tr>
+<tr>
+<td><code>softbankroboticstraining.github.io/pepper-chatbot-api/</code></td>
+<td>Dialogflow-based "Pepper Chat" — source of QiChat voice-shaping commands for affective TTS</td>
+</tr>
+<tr>
+<td><code>github.com/softbankrobotics-labs/pepper-proactive-mobility</code></td>
+<td>Proactive approach + ARUCO/SLAM localisation — basis for the Wayfinder condition</td>
+</tr>
+<tr>
+<td><code>github.com/aldebaran/naoqi_navigation_samples</code></td>
+<td><code>explore</code>/<code>patrol</code>/<code>places</code> Choregraphe samples — fastest way to add named-location navigation</td>
+</tr>
+<tr>
+<td><code>github.com/ros-naoqi/naoqi_bridge</code></td>
+<td>ROS-side wrapper of NAOqi services — entry into Nav2</td>
+</tr>
+<tr>
+<td><code>groups.google.com/g/ros-sig-aldebaran</code></td>
+<td>Slow but active community list — best place to ask <code>naoqi_driver2</code> questions</td>
+</tr>
+<tr>
+<td><code>doc.aldebaran.com/2-5/index_dev_guide.html</code> and <code>.../getting_started/index.html</code></td>
+<td>Official guides; sections on <code>ALMemory</code> events and <code>ALAnimatedSpeech</code> configuration are the most frequently re-read</td>
+</tr>
+<tr>
+<td><code>robocupathomeedu.org/.../online-challenge-2022</code></td>
+<td>External rubric of service-robot tasks — use to scope thesis claims</td>
+</tr>
+<tr>
+<td><code>maxtronics.com/en/support/kb/</code> (NAO content)</td>
+<td>NAO-specific KB; relevant if you ever port OmniLLM to NAO as a portability proof</td>
+</tr>
+<tr>
+<td><code>github.com/orgs/aldebaran/repositories</code></td>
+<td><code>libqi</code>, <code>libqi-python</code>, <code>qibuild</code> are still maintained (Apr 2026 updates); <code>robot-jumpstarter</code> is the best Python starter</td>
+</tr>
+<tr>
+<td><code>softbankroboticstraining.github.io/pepper-chatbot-api/#pepper-chat</code></td>
+<td>Same as above — anchored deep link into the QiChat command reference</td>
+</tr>
+<tr>
+<td><code>github.com/softbankrobotics-labs</code> (org root)</td>
+<td>Browse for <code>pepper-aruco</code>, <code>pepper-mask-detection</code>, <code>pepper-deep-learning</code>, <code>pepper-solitaries-loop</code>, <code>navigation-toolkit-demo</code></td>
+</tr>
+<tr>
+<td><code>ros-naoqi/naoqi_bridge/tree/master/naoqi_apps</code></td>
+<td>Sample ROS apps that use the bridge — read these before writing your own ROS node</td>
+</tr>
+<tr>
+<td><code>maxtronics.com/en/support/kb/category/pepper/downloads-softwares/</code></td>
+<td>Pepper 2.5 &amp; 2.9 downloads — the most reliable place to re-fetch Choregraphe and the SDK</td>
+</tr>
+<tr>
+<td><code>doc.aldebaran.com/2-5/getting_started/index.html</code></td>
+<td>The "first 10 minutes with Pepper" reference</td>
+</tr>
+<tr>
+<td><code>github.com/incognite-lab/Pepper-Controller</code></td>
+<td>Python-class abstraction over NAOqi 2.5 — model for refactoring <code>naoqi_client.py</code></td>
+</tr>
+<tr>
+<td><code>github.com/lillypiri/pepper</code></td>
+<td>Beginner Choregraphe exercises — useful for onboarding collaborators new to box-and-wire</td>
+</tr>
+<tr>
+<td><code>nlp.fi.muni.cz/trac/pepper/wiki/InstallationInstructions</code></td>
+<td>Linux install path with a custom <code>pyenv_install.sh</code> — best alternative to Anaconda</td>
+</tr>
+<tr>
+<td><code>robohack.org.uk/viewforum.php?f=6</code></td>
+<td>Small UK robotics-hobbyist forum — occasional Pepper troubleshooting threads, low signal</td>
+</tr>
+<tr>
+<td><code>github.com/sunzhida/COMP4461_2017Fall_Lab4</code></td>
+<td>HKUST course lab — <code>expression_teller.py</code> is a 50-line baseline for emotion-aware response</td>
+</tr>
+<tr>
+<td><code>zijianhu.com/post/nao-tutorial/installation/</code></td>
+<td>Tutorial-style NAO install — Linux focus, complements §27A.3</td>
+</tr>
+<tr>
+<td><code>wiki.ros.org/nao/Tutorials/Installation</code></td>
+<td>Official ROS NAO install — pre-Pepper but the bring-up patterns transfer</td>
+</tr>
+<tr>
+<td><code>arxiv.org/abs/2401.17663</code></td>
+<td>Emotion-adaptive proxemics paper (Bilen et al. 2024) — empirical basis for tying detected emotion to approach distance in the Wayfinder extension</td>
+</tr>
+<tr>
+<td><code>github.com/ageitgey/face_recognition</code></td>
+<td>dlib-based face recognition; the practical choice for a <code>/recognise_face</code> endpoint</td>
+</tr>
+<tr>
+<td><code>github.com/LucaCorvitto/Emotional_Pepper</code></td>
+<td>PDDL-planned emotional behaviour over a tablet UI — hybrid LLM+planner inspiration</td>
+</tr>
+<tr>
+<td><code>github.com/AnonKour/pynaoqi</code></td>
+<td>Linux mirror of the Python 2.7 NAOqi SDK — keep the URL in case Aldebaran's mirror disappears</td>
+</tr>
+<tr>
+<td><code>robotlab.com/support/factory-reset-on-pepper-robot</code></td>
+<td>Authoritative factory-reset SOP (PuTTY/FileZilla/<code>nao-autoflash</code>) — <em>do not</em> run this without a current backup of <code>/home/nao</code></td>
+</tr>
+<tr>
+<td><code>github.com/UoA-CARES/pepper-demo</code></td>
+<td>ZLIB symlink fix for Choregraphe on Linux — save for later</td>
+</tr>
+<tr>
+<td><code>github.com/UoA-CARES/Pepper-GPT</code></td>
+<td>Closest sibling to OmniLLM in spirit — different LLM strategy (single GPT-3.5), worth full code-walk</td>
+</tr>
+<tr>
+<td><code>github.com/igor-lirussi/Dialogue-Pepper-Robot</code></td>
+<td>Java AIML + Py2 NAOqi split — the architectural ancestor of OmniLLM</td>
+</tr>
+<tr>
+<td><code>github.com/ilabsweden/pepperchat</code></td>
+<td>The original (2023) public HTTP-bridge OpenAI Pepper project — cite as prior art</td>
+</tr>
+</tbody>
+</table>
+<h3 id="27a11-what-is-deliberately-not-here">27A.11  What Is Deliberately Not Here</h3>
+<p>Three categories of resource the user originally listed but that
+proved either inaccessible or off-topic on closer reading:</p>
+<ul>
+<li><strong><code>caressesrobot.org</code></strong> — server unreachable during research; the
+  <em>published papers</em> (Sgorbissa, Bruno, et al.) are the productive
+  citation target rather than the website.</li>
+<li><strong><code>arxiv.org/abs/2401.17663</code></strong> — not an LLM-on-Pepper paper. It is a
+  navigation/proxemics paper that nonetheless informs §27A.6.</li>
+<li><strong><code>voisona.com</code> and CeVIO</strong> — commercial, singing-voice, Japanese-
+  only; the practical Japanese-TTS path for OmniLLM is VOICEVOX, not
+  these. Listed because the user provided them; reasoning recorded so
+  the choice does not have to be re-litigated later.</li>
+</ul>
+<div class='pageBreak'></div>
+
 <h1 id="part-v-setup-running">PART V — SETUP &amp; RUNNING</h1>
 <p>This part is action-oriented. By the end, you will have a clean install,
 running tests, a server you can talk to with <code>curl</code>, and (optionally) a
