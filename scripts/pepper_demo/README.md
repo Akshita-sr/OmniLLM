@@ -23,7 +23,7 @@ cd "C:\Users\akshi\OneDrive\Desktop\OmniLLM"
 python -m omnillm.server.app
 ```
 
-Wait for `Indexed 40 chunks` and `Running on http://127.0.0.1:5000`.
+Wait for `Knowledge base loaded — 49 total chunks` and `Running on http://127.0.0.1:5000`.
 
 ### 2. Bridge sanity check — robot only, no AI (Python 2.7)
 
@@ -106,7 +106,7 @@ asyncio.run(main())
 python scripts\pepper_demo\test_all_conditions.py
 ```
 
-This runs all 9 test scenarios and writes results to `scripts/pepper_demo/test_results.txt`.
+This runs all 15 test scenarios (4 task types × 5 conditions minus the few skipped combinations) and writes results to `scripts/pepper_demo/test_results.txt`.
 
 ## Setup gotchas
 

@@ -65,6 +65,14 @@ htmlcov/
 *.log
 logs/
 
+# Generated book outputs (rebuild with python book/build_pdf.py)
+book/OmniLLM_Book.pdf
+book/OmniLLM_Book.html
+
+# Transient batch-run transcripts (structured data lives in results/)
+scripts/pepper_demo/test_results.txt
+scripts/pepper_demo/*.log
+
 # Type checking
 .mypy_cache/
 .ruff_cache/
