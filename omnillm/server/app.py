@@ -267,6 +267,11 @@ def create_app(
                 if not action.get("speech"):
                     logger.warning("LangGraph returned empty speech — falling back to direct gateway.")
                 else:
+                    meta = dict(action.get("metadata") or {})
+                    meta.setdefault("model_id", result.get("model_id") or _default_model)
+                    meta.setdefault("rag_enabled", rag_enabled)
+                    meta.setdefault("condition", condition)
+                    action["metadata"] = meta
                     return jsonify(action)
             except Exception:
                 logger.exception("Graph invocation failed — falling back to direct gateway.")
@@ -413,7 +418,17 @@ def _fallback_interact(
     try:
         resp = run_async(gateway.query(default_model, messages))
         speech = resp.content if not resp.is_error else "I'm sorry, I could not generate a response."
-        action = {"speech": speech, "gesture": "nod", "emotion_led": "#44AAFF"}
+        action = {
+            "speech": speech,
+            "gesture": "nod",
+            "emotion_led": "#44AAFF",
+            "metadata": {
+                "model_id": getattr(resp, "model_id", default_model) or default_model,
+                "rag_enabled": rag_enabled,
+                "condition": condition,
+                "path": "fallback",
+            },
+        }
         return jsonify(action)
     except Exception:
         logger.exception("Fallback LLM call failed")
