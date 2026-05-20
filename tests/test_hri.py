@@ -133,6 +133,22 @@ class TestLanguageDetector:
         assert isinstance(result, LanguageDetectionResult)
         assert 0 <= result.confidence <= 1
 
+    def test_detect_short_english_question(self):
+        # Regression: substring matches against 2-letter Spanish words
+        # ("la" in "lab", "es" in "does", "en" in "open") used to mis-
+        # classify this plain English question as Spanish, routing it
+        # through the multilingual node → gemini-flash.
+        result = self.detector.detect("What time does the lab open?")
+        assert result.language == "en"
+        assert result.is_english is True
+
+    def test_detect_english_with_substring_traps(self):
+        # Words like "open", "lab", "ten" each contain 2-letter foreign
+        # function words. Word-boundary matching must ignore them.
+        result = self.detector.detect("Is the lab open at ten?")
+        assert result.language == "en"
+        assert result.is_english is True
+
     def test_detect_empty_string_returns_english(self):
         result = self.detector.detect("")
         assert result.language == "en"

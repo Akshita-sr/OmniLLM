@@ -176,9 +176,13 @@ class LanguageDetector:
                 language="en", confidence=0.5, script="Latin", is_english=True
             )
 
-        # 1. Unicode script analysis (fast, zero dependencies)
+        # 1. Unicode script analysis (fast, zero dependencies).
+        # Threshold 0.80 catches CJK (which is otherwise unrecoverable once
+        # we drop substring matching — CJK has no whitespace, so the whole
+        # phrase is a single token and word-set membership never hits a
+        # 1-char signal like "在").
         script, script_lang, script_conf = self._detect_script(text)
-        if script_lang and script_conf >= 0.85:
+        if script_lang and script_conf >= 0.80:
             return LanguageDetectionResult(
                 language=script_lang,
                 confidence=script_conf,
@@ -186,31 +190,32 @@ class LanguageDetector:
                 is_english=(script_lang == "en"),
             )
 
-        # 2. Word-level signal matching
+        # 2. Word-level signal matching (word-boundary tokens only).
+        # NB: matching `s in text.lower()` (substring) is unsafe — two-letter
+        # function words like Spanish "la"/"es"/"en" or Portuguese "o"/"a"
+        # appear inside English words ("lab", "does", "open"), which mis-
+        # routes plain English to the multilingual model. Only word-boundary
+        # hits against the tokenised set count.
         words = set(re.findall(r"\b\w+\b", text.lower()))
 
-        # Check for English signals
         en_hits = len(words & _ENGLISH_SIGNALS)
-        if en_hits >= 3:
-            confidence = min(0.95, 0.5 + en_hits * 0.05)
-            return LanguageDetectionResult(
-                language="en",
-                confidence=confidence,
-                script=script or "Latin",
-                is_english=True,
-            )
-
-        # Check for other language signals
         best_lang = "en"
-        best_score = en_hits * 0.8
+        best_score = en_hits
         for lang, signals in _LANG_WORD_SIGNALS.items():
-            hits = sum(1 for s in signals if s in words or s in text.lower())
+            hits = sum(1 for s in signals if s in words)
             if hits > best_score:
                 best_score = hits
                 best_lang = lang
 
-        if best_lang == "en" and best_score < 1:
-            # Try langdetect library if available
+        if best_lang == "en":
+            if en_hits >= 1:
+                confidence = min(0.95, 0.5 + en_hits * 0.05)
+                return LanguageDetectionResult(
+                    language="en",
+                    confidence=confidence,
+                    script=script or "Latin",
+                    is_english=True,
+                )
             langdetect_result = self._try_langdetect(text)
             if langdetect_result:
                 return langdetect_result
