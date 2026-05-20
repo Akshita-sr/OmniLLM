@@ -25,6 +25,16 @@ import unicodedata
 from dataclasses import dataclass
 
 
+#: ISO 639-1 -> human-readable language name (used by the multilingual LLM node)
+_LANGUAGE_NAME_MAP: dict[str, str] = {
+    "en": "English", "fr": "French", "de": "German", "es": "Spanish",
+    "it": "Italian", "pt": "Portuguese", "nl": "Dutch", "ru": "Russian",
+    "pl": "Polish", "zh": "Chinese", "ja": "Japanese", "ko": "Korean",
+    "ar": "Arabic", "hi": "Hindi", "tr": "Turkish", "el": "Greek",
+    "he": "Hebrew", "th": "Thai", "unknown": "Unknown",
+}
+
+
 @dataclass
 class LanguageDetectionResult:
     """Result of language detection.
@@ -40,6 +50,21 @@ class LanguageDetectionResult:
     confidence: float
     script: str = "Latin"
     is_english: bool = True
+
+    @property
+    def language_code(self) -> str:
+        """Alias for ``language`` (kept for caller compatibility)."""
+        return self.language
+
+    @property
+    def language_name(self) -> str:
+        """Human-readable language name, e.g. ``"French"``."""
+        return _LANGUAGE_NAME_MAP.get(self.language, self.language.upper())
+
+    @property
+    def recommended_model(self) -> str:
+        """OmniLLM model ID best suited to this language (from the static map)."""
+        return _LANGUAGE_MODEL_MAP.get(self.language, _LANGUAGE_MODEL_MAP["unknown"])
 
 
 # Mapping of language code → recommended OmniLLM model for that language.
