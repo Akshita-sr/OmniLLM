@@ -62,5 +62,8 @@
 - **Appendix F** — File Index — Every File in the Repository, One Line Each
 - **Appendix G** — External Resources — Papers, Libraries, Repositories (Annotated)
 - **Appendix H** — Pepper-LLM Integration Survey — The State of the Field, May 2026
+- **Appendix I** — The Pepper Platform Reference — Hardware, NAOqi, Choregraphe, the Five Bridge Patterns
+- **Appendix J** — AI-Stack Library Rationale — What, Why, Alternatives, Where Used
+- **Appendix K** — Walkthroughs, Feature Catalogue, and Execution Plans (Line-by-Line Code Journey, Worked Session, Eight Axes, Complete Feature Reference, One-Month Plan)
 
 \newpage

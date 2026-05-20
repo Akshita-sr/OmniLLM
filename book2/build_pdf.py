@@ -67,6 +67,9 @@ SOURCE_FILES: tuple[str, ...] = (
     "13_appendix_c_commands_d_troubleshooting.md",
     "14_appendix_e_flow_f_file_index.md",
     "15_appendix_g_h_references.md",
+    "16_appendix_i_pepper_platform.md",
+    "17_appendix_j_library_rationale.md",
+    "18_appendix_k_walkthroughs_and_features.md",
 )
 
 

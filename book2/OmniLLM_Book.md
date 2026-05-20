@@ -240,6 +240,9 @@ If you have read the first edition, treat this one as a complete replacement. Se
 - **Appendix F** — File Index — Every File in the Repository, One Line Each
 - **Appendix G** — External Resources — Papers, Libraries, Repositories (Annotated)
 - **Appendix H** — Pepper-LLM Integration Survey — The State of the Field, May 2026
+- **Appendix I** — The Pepper Platform Reference — Hardware, NAOqi, Choregraphe, the Five Bridge Patterns
+- **Appendix J** — AI-Stack Library Rationale — What, Why, Alternatives, Where Used
+- **Appendix K** — Walkthroughs, Feature Catalogue, and Execution Plans (Line-by-Line Code Journey, Worked Session, Eight Axes, Complete Feature Reference, One-Month Plan)
 
 \newpage
 
@@ -5770,6 +5773,1672 @@ OmniLLM is the **first generation** of multi-LLM embodied benchmarking. By 2030,
 - Counterbalancing automation, ethics-protocol templating, and questionnaire delivery will all be commodity tools.
 
 This thesis is a snapshot of where the field is in May 2026. The codebase is built to be re-runnable in May 2027, in May 2028, and so on — with the same protocol, against the LLMs current at that date.
+
+\newpage
+
+\newpage
+
+# Appendix I — The Pepper Platform Reference
+
+> *Everything you need to know about the **hardware**, **NAOqi middleware**, **Choregraphe IDE**, and **community-validated bridge patterns** — collected in one place. Parts I–VI use Pepper as a black box; this appendix opens the black box.*
+>
+> *Ported and updated from the first-edition book's Part IV (Chapters 23–27A). Knowledge-base references have been updated from the legacy IRAI Lab to the current **DIBRIS / Sgorbissa HRI Lab** context.*
+
+\newpage
+
+## I.1 — Meet Pepper: The Hardware Inside the Plastic Shell
+
+### At a Glance
+
+Pepper is a **120 cm**, **28 kg** humanoid robot from SoftBank Robotics. **20 degrees of freedom**. Intel Atom CPU, 4 GB RAM. Four microphones in the head. Two ear speakers. A 10.1″ chest tablet. Eye LEDs. Three omnidirectional wheels at the base. ~8–10 hours of battery. Knowing this hardware shapes how you think about the AI server's job.
+
+### I.1.1 — Physical Specs
+
+| Attribute | Value |
+|-----------|-------|
+| Height | 120 cm |
+| Weight | 28 kg |
+| Degrees of freedom | 20 (head 2, each arm/hand 6, hip 2, knee 1, base wheels 3) |
+| Battery | 30 Ah / 795 Wh lithium-ion (~8–10 hours active) |
+| Onboard CPU | Intel Atom E3845 quad-core @ 1.91 GHz |
+| Onboard RAM | 4 GB DDR3 |
+| Onboard storage | 8 GB flash + microSD slot |
+| Operating system | NAOqi OS (modified Gentoo Linux) |
+| Onboard Python | Python 2.7 |
+| Tablet OS | Android 4.4 (1.3 GHz quad-core ARM Cortex-A7, 1 GB RAM, 32 GB storage) |
+
+### I.1.2 — Sensors at a Glance
+
+```
+                 +---------------------+
+                 |  HEAD                |
+                 |  * 2x 5 MP RGB cam  |
+                 |     (forehead, chin) |
+                 |  * ASUS Xtion 3D    |
+                 |     depth sensor    |
+                 |  * 4x microphones   |
+                 |  * 3x capacitive    |
+                 |     touch sensors   |
+                 |  * Eye LEDs (RGB)   |
+                 +------+--------------+
+                        |
+                +-------+--------+
+                |  TORSO          |
+                |  * 10.1" tablet |
+                |     1280x800    |
+                |  * Hand touch   |
+                |     sensors     |
+                |  * IMU          |
+                +-------+---------+
+                        |
+              +---------+----------+
+              |  BASE                |
+              |  * 3x wheels        |
+              |  * 2x sonar         |
+              |  * 6x laser line    |
+              |  * 2x infrared      |
+              |  * 3x bumper        |
+              |  * IMU              |
+              +---------------------+
+```
+
+The cameras and depth sensor are not currently consumed by OmniLLM; they are available for the vision-language extensions discussed in Chapter 33.
+
+### I.1.3 — The Tablet
+
+The chest tablet is a **separate Android computer** communicating with the head computer over an internal network at IP `198.18.0.1`. From OmniLLM's perspective it is just a NAOqi service: `ALTabletService`. You can `loadUrl()` to display web content, `showImage()` to display an image, or `executeJS()` to run JavaScript in the browser.
+
+For the Embodied LLM Arena experimental study, the tablet is mostly unused (the four task types do not need a screen), but it is available for showing maps during navigation tasks. A tablet-based questionnaire UI is one of the short-term improvements in Chapter 32.
+
+### I.1.4 — The Speaker / Microphone Pair
+
+Pepper has **four microphones** in its head, and the NAOqi audio device exposes all four channels at 48 kHz, **or** a single mixed-down channel at **16 kHz**. OmniLLM uses the 16 kHz mono channel — the same format Whisper expects.
+
+The "front" channel (channel 3 in the four-channel layout) is the most useful for one-on-one conversation. `ALAudioDevice.setClientPreferences` configures it:
+
+```python
+self._audio_device.setClientPreferences(
+    "OmniLLMCapture",
+    16000,    # sample rate
+    3,        # channel: front
+    0,        # deinterleaved: no
+)
+```
+
+### I.1.5 — Eye LEDs as a Communication Channel
+
+The eye LEDs are addressable RGB LEDs exposed through `ALLeds`:
+
+```python
+leds.fadeRGB("FaceLeds", r, g, b, fade_duration_seconds)
+```
+
+OmniLLM's gesture planner (Chapter 13.3) uses eye colour to communicate **interaction mode**:
+
+| Colour | Hex | Mode |
+|--------|-----|------|
+| Friendly green | `#00FF88` | Greeting, acknowledgement, social |
+| Calm blue | `#00AAFF` | Navigation guidance |
+| Default blue | `#44AAFF` | Idle / neutral |
+| White | `#FFFFFF` | Attention to tablet |
+| Yellow | `#FFFF00` | Thinking |
+| Red-orange | `#FF4400` | Confused / error |
+| Warm orange | `#FF8800` | Goodbye |
+
+This is **not arbitrary aesthetic.** Eye colour is a documented HRI signal that participants register subconsciously. Switching from blue (navigation) to green (success) reinforces the spoken response.
+
+### I.1.6 — Why `ALAnimatedSpeech`, Not Plain `ALTextToSpeech`
+
+NAOqi has two text-to-speech services:
+
+- **`ALTextToSpeech`** — voice only. The robot is rigid while speaking.
+- **`ALAnimatedSpeech`** — voice + automatic body gestures synchronised to the speech content.
+
+OmniLLM uses `ALAnimatedSpeech` **always**, for three reasons:
+
+1. Embodied perception research (Bartneck 2009; Andrist et al. 2014) consistently shows that "talking head" robots are rated lower on naturalness and intelligence.
+2. Pepper has joints — not using them is wasteful.
+3. The cost is zero — `ALAnimatedSpeech` is built-in.
+
+The configuration that produces sensible motion:
+
+```python
+config = {"bodyLanguageMode": "contextual"}
+animated_speech.say(text, config)
+```
+
+`bodyLanguageMode` accepts `"contextual"` (gestures match speech content — **recommended**), `"random"` (random gestures — looks unhinged), or `"disabled"` (back to talking-head mode).
+
+### I.1.7 — Hardware End-of-Life Note
+
+Aldebaran (the original company behind Pepper and NAO) filed for bankruptcy in **February 2025**. Maxvision Technology (Shenzhen) acquired the IP in **July 2025**. **No new units are being manufactured.** Existing units continue to work; spare parts are increasingly hard to source.
+
+This is one reason OmniLLM is designed to be platform-portable: the abstract `RobotBridge` interface (Chapter 13.1) can target NAO, Buddy, or any future robot you point it at. The brain is platform-agnostic; only the bridge implementation is Pepper-specific.
+
+\newpage
+
+## I.2 — NAOqi 101: The Operating System That Runs on Pepper
+
+### At a Glance
+
+**NAOqi** is the middleware that makes Pepper a robot rather than a Linux box on wheels. It is a **service broker on TCP port 9559** that exposes named services (`ALAnimatedSpeech`, `ALMotion`, etc.) to any client that connects with the right credentials. Its Python binding is **Python 2.7 only**.
+
+### I.2.1 — What NAOqi Is
+
+Imagine the robot as a Linux server, and NAOqi as the daemon process that runs on top of Linux providing all the high-level robot abstractions:
+
+```
+              +----------------------------------------------+
+              |  Hardware                                    |
+              |  motors, sensors, speakers, microphones      |
+              +----------------+-----------------------------+
+                               ^
+              +----------------+-----------------------------+
+              |  Linux kernel (Gentoo)                       |
+              |  device drivers                              |
+              +----------------+-----------------------------+
+                               ^
+              +----------------+-----------------------------+
+              |  NAOqi daemon                                |
+              |  starts ~50 services on port 9559            |
+              |  ALMotion, ALMemory, ALAnimatedSpeech,       |
+              |  ALAudioDevice, ALLeds, ALBehaviorManager,   |
+              |  ALFaceDetection, ALTabletService, ...       |
+              +----------------+-----------------------------+
+                               ^
+              +----------------+-----------------------------+
+              |  Clients                                     |
+              |  * Choregraphe over the LAN                  |
+              |  * Custom Python 2.7 clients (like ours)     |
+              |  * Custom C++ clients                        |
+              +----------------------------------------------+
+```
+
+### I.2.2 — The Service Broker Model
+
+NAOqi is built around a **service broker**. Every NAOqi service registers itself with the broker on startup; clients look up services by name and get a proxy object that can call methods on them. Services can run **locally** (in the same process — fast, zero-copy) or **remotely** (over TCP — slower, fully serialised).
+
+Two ways to call a service from Python:
+
+```python
+# Modern (NAOqi 2.x)
+import qi
+session = qi.Session()
+session.connect("tcp://192.168.1.100:9559")
+tts = session.service("ALAnimatedSpeech")
+tts.say("Hello!")
+
+# Legacy (NAOqi 1.x)
+from naoqi import ALProxy
+tts = ALProxy("ALAnimatedSpeech", "192.168.1.100", 9559)
+tts.say("Hello!")
+```
+
+OmniLLM's `naoqi_client.py` tries `qi` first, falls back to `naoqi`, so it works against both NAOqi 1.x and 2.x.
+
+### I.2.3 — The Twelve Services You Need to Know
+
+| Service | What it does |
+|---------|--------------|
+| `ALMotion` | Joint control. `wakeUp()` enables motors; `rest()` disables. `setAngles()` moves a joint. `moveTo()` walks. |
+| `ALAnimatedSpeech` | TTS with body gestures. `say(text, config)`. |
+| `ALTextToSpeech` | TTS without gestures. Use when you need a stationary robot. |
+| `ALAudioDevice` | Microphone capture. `setClientPreferences()` + `subscribe()`. |
+| `ALAudioRecorder` | Record audio to a file. Simpler than callback-based capture. |
+| `ALLeds` | LED control. `fadeRGB("FaceLeds", r, g, b, duration)`. |
+| `ALBehaviorManager` | Run installed animations. `runBehavior("path/to/behavior")`. `isBehaviorInstalled()`. |
+| `ALMemory` | Key-value store / event bus. `getData(key)`, `subscriber(event)`. |
+| `ALFaceDetection` | Vision: detect faces. Subscribe to the `"FaceDetected"` event. |
+| `ALSpeechRecognition` | On-board speech recognition (limited vocabulary). Mostly inadequate; OmniLLM uses Whisper instead. |
+| `ALTabletService` | Chest tablet display. `loadUrl()`, `showImage()`. |
+| `ALRobotPosture` | Whole-body posture. `goToPosture("Stand", 0.8)`. |
+
+Plus two more OmniLLM specifically uses:
+
+- **`ALTracker`** — follows a target (face, sound, marker). Critical for the face-tracking protocol in Chapter 21.
+- **`ALAutonomousLife`** — controls Pepper's autonomous "stay alive" behaviours. Calling `setState("disabled")` on connect is recommended to prevent Pepper's stock dialogue from talking over your LLM (see §I.5).
+
+### I.2.4 — The Python 2.7 Constraint Explained
+
+The NAOqi Python binding (`pynaoqi`) is a platform-specific archive shipped on SoftBank's developer portal. It is a CPython extension that **depends on the binary layout of Python 2.7 specifically.** There is no port to Python 3 that exposes the full service surface.
+
+A community-built `qi 3.1.5` package (`pip install qi==3.1.5`) exists for Python 3 on Linux x86_64, but several services are broken: touch detection, audio callbacks, certain event subscriptions. It is unsuitable for production use.
+
+The conclusion: **NAOqi requires Python 2.7. Modern AI libraries require Python 3.11+. They cannot live in the same process.** Hence the two-process HTTP bridge of Chapter 16 and §I.4 below.
+
+### I.2.5 — Lifecycle Quirks
+
+Two NAOqi quirks that will trip you up:
+
+1. **Stiffness must be enabled before any movement.** A fresh-booted Pepper has zero stiffness — its motors are dead weight. You must call `motion.wakeUp()` (or `motion.setStiffnesses("Body", 1.0)`) first. `ALAnimatedSpeech` will speak without stiffness, but the body language will not animate.
+
+2. **`ALAudioRecorder` and `ALSpeechRecognition` cannot share the microphone.** They both subscribe to the audio device exclusively. You must `unsubscribe` one before using the other. OmniLLM uses neither directly — it captures via `ALAudioDevice` and sends the bytes to Whisper.
+
+### I.2.6 — Connection From Your PC
+
+To connect from your PC, you need:
+
+1. **Network access.** Same Wi-Fi as Pepper, or wired to the same LAN.
+2. **Pepper's IP address.** Press the chest button once and Pepper says it ("My IP address is 192.168.1.100").
+3. **The pynaoqi SDK.** Downloaded from SoftBank's developer portal (or the Maxvision mirror — see §I.5), installed at `C:\pynaoqi\pynaoqi-python2.7-2.5.5.5-win32-vs2013\`.
+4. **Python 2.7** at `C:\Python27\python.exe`.
+5. **The right `PYTHONPATH`**:
+
+```cmd
+set PYTHONPATH=C:\pynaoqi\pynaoqi-python2.7-2.5.5.5-win32-vs2013\lib;%PYTHONPATH%
+set PATH=C:\pynaoqi\pynaoqi-python2.7-2.5.5.5-win32-vs2013\lib;%PATH%
+```
+
+Then `import naoqi` or `import qi` will work.
+
+\newpage
+
+## I.3 — Choregraphe: The Visual Programming Studio
+
+### At a Glance
+
+**Choregraphe** is SoftBank's desktop IDE for Pepper / NAO. Box-and-wire visual programming + Python script editor + 3D virtual robot simulator. Critical for OmniLLM in three ways: (1) testing behaviours without a physical robot, (2) installing custom animations the gesture planner will trigger, and (3) live-monitoring during experimental sessions.
+
+### I.3.1 — The Four-Panel Layout
+
+```
++--------------+----------------------------+-----------------+
+|              |                            |                 |
+|   BOX        |       FLOW DIAGRAM         |   3D ROBOT      |
+|   LIBRARIES  |                            |   VIEW          |
+|   (left)     |       (center)             |                 |
+|              |                            |   (right)       |
+|   Drag boxes |   Where you wire boxes     |                 |
+|   from here  |   together to make a       |   Virtual or    |
+|              |   behaviour                |   real Pepper   |
++--------------+----------------------------+-----------------+
+|                                                              |
+|   LOG VIEWER  /  SCRIPT EDITOR  (bottom)                     |
+|   * NAOqi log messages  /  Python script execution           |
+|                                                              |
++--------------------------------------------------------------+
+```
+
+It is locked to NAOqi 2.5 — version 2.5.5.5 or 2.5.10/11 for Pepper. Newer NAOqi 2.9 (Android-based) does **not** support Choregraphe; for 2.9 use QiSDK (Java/Kotlin) instead.
+
+### I.3.2 — When to Use Choregraphe Versus OmniLLM
+
+Choregraphe and OmniLLM serve different purposes — they are friends, not substitutes:
+
+| You want to… | Use Choregraphe | Use OmniLLM |
+|--------------|-----------------|-------------|
+| Test if Pepper's speech works | yes | — |
+| Test a single gesture animation | yes | — |
+| Build / tune a custom animation | yes | — |
+| Build a *scripted* interaction | yes | — |
+| Build an **AI-driven** conversation | — | yes |
+| Use multiple LLMs as backends | — | yes |
+| Run a controlled HRI experiment | — | yes |
+| Live-monitor during an experiment | yes (alongside) | yes |
+
+The typical combined workflow:
+
+1. **Plan the gesture vocabulary** in Choregraphe. Drag and edit animations until they look natural.
+2. **Install the custom behaviours** on Pepper (File → Build Application Package, then upload).
+3. **Add the new gesture names** to OmniLLM's `GESTURE_TO_BEHAVIOR` mapping in `naoqi_client.py` and to the planner in `gesture_planner.py`.
+4. **Run the OmniLLM experiment**, leaving Choregraphe open as a monitor.
+
+### I.3.3 — Connecting Choregraphe to a Robot
+
+**Virtual robot** (no hardware needed):
+
+1. Open Choregraphe.
+2. **Connection → Connect to virtual robot**.
+3. Pepper appears in the 3D view; the bottom-left status shows `Connected to localhost:<port>` (port is randomised per launch — note it for `--robot-port`).
+
+**Physical robot:**
+
+1. PC and Pepper on the same Wi-Fi.
+2. Press Pepper's chest button → it says its IP.
+3. **Connection → Connect to…** enter the IP, port `9559`.
+4. The 3D view now mirrors the real robot's joint positions.
+
+### I.3.4 — Box-and-Wire Programming
+
+Each Choregraphe **box** is a small piece of behaviour. Boxes have input and output **bangs** (signal triggers). You drag boxes onto the flow diagram and connect their bangs to define the order:
+
+```
+  +-------------+     +--------------+     +----------------+
+  |  onStart    |---->|  Say "Hello" |---->| Wave Animation |
+  +-------------+     +--------------+     +----------------+
+                                                   |
+                                                   v
+                                          +----------------+
+                                          |  Set LEDs blue |
+                                          +----------------+
+```
+
+Inside each box is a Python 2.7 script with `onLoad()`, `onUnload()`, `onInput_onStart()`, and `onInput_onStop()` lifecycle methods. You can inspect and edit any box's script.
+
+### I.3.5 — Useful Boxes for OmniLLM Work
+
+When testing Pepper for OmniLLM, the boxes you'll reach for are:
+
+- **Speech / Animated Say** — sanity check that ALAnimatedSpeech works.
+- **Movement / Animations / Gestures / Hey_1** — wave hello.
+- **Movement / Animations / Gestures / Explain_8** — point left (OmniLLM's `point_left`).
+- **Movement / Animations / Gestures / Explain_7** — point right.
+- **LEDs / Set LEDs** — change eye colour.
+- **Movement / Postures / Stand** — wake up posture.
+
+### I.3.6 — The Script Editor as a Quick Test Bench
+
+You don't need to drag boxes for everything. Press `Alt+5` to open the Script Editor and just type Python:
+
+```python
+# Test ALAnimatedSpeech directly
+tts = ALProxy("ALAnimatedSpeech", "localhost", 9559)
+config = {"bodyLanguageMode": "contextual"}
+tts.say("This is what an OmniLLM response sounds like.", config)
+
+# Test a gesture
+behavior = ALProxy("ALBehaviorManager", "localhost", 9559)
+behavior.runBehavior("animations/Stand/Gestures/Explain_8")  # point_left
+
+# Test eye LEDs
+leds = ALProxy("ALLeds", "localhost", 9559)
+leds.fadeRGB("FaceLeds", 0.0, 0.67, 1.0, 0.5)   # navigation blue
+```
+
+This is the fastest way to verify everything OmniLLM will need.
+
+### I.3.7 — Installing a Custom Behaviour
+
+If you build a new animation in Choregraphe and want OmniLLM to trigger it:
+
+1. **In Choregraphe**: design the animation in the Timeline Editor, save the project as `MyBehaviors/WelcomeDance`.
+2. **Upload to Pepper**: `File → Upload to robot…`. The behaviour now lives at `mybehaviors/WelcomeDance` on the robot.
+3. **In OmniLLM**: edit `omnillm/server/naoqi_client.py`:
+
+```python
+GESTURE_TO_BEHAVIOR = {
+    # ... existing entries ...
+    "welcome_dance": "mybehaviors/WelcomeDance",   # <-- add this
+}
+```
+
+4. **Trigger it**: edit `omnillm/robotics/gesture_planner.py` to map appropriate response text or task type to `"welcome_dance"`.
+
+\newpage
+
+## I.4 — Five Bridge Patterns From the Literature
+
+> *Chapter 16 introduced OmniLLM's three bridge solutions (HTTP server, HTTP client, stub). This section surveys the **five published patterns** used across 15+ Pepper-LLM projects and explains why OmniLLM chose Pattern 1.*
+
+### I.4.1 — The Five Patterns
+
+| Pattern | Used in | Trade-offs |
+|---------|---------|------------|
+| **1. HTTP / REST bridge** *(OmniLLM)* | ilabsweden/pepperchat (2023), Frontiers ASD therapy, 6+ others | Easiest to debug, well-understood, ~50–200 ms overhead |
+| **2. Socket-based** | Pepper-GPT (Auckland), Ghent University elder care | Lower latency (~10–50 ms), more code |
+| **3. ROS2 bridge** (`naoqi_driver2`) | Multi-robot research projects | High setup complexity, powerful for fleets |
+| **4. MQTT broker** | LAIR-GPT (Ancona) | Good when many components publish/subscribe |
+| **5. Python 3 `qi 3.1.5`** | Prototypes | Single process but several services broken |
+
+OmniLLM picked **Pattern 1** because it is the most-tested in the literature, the easiest to debug (every message is just `curl`-able), and the overhead is comfortably within the latency budget.
+
+### I.4.2 — Failure Modes the Bridge Must Handle
+
+The HTTP bridge introduces three new failure surfaces. Each has a defensive fallback:
+
+| Failure | Mitigation |
+|---------|------------|
+| AI server crashed | NAOqi client times out, says "I could not connect to my AI brain" — does not crash |
+| Network partition | Same as above; the `urlopen` timeout is 30 s |
+| AI server returns malformed JSON | NAOqi client logs and falls back to silent failure |
+| Audio capture returns empty bytes | Server can fall back to text-only mode (text field also accepted) |
+| LangGraph not installed on AI server | `_fallback_interact` direct gateway call still works |
+| Whisper not installed | Server returns 500 on `/transcribe`; text-only mode still works |
+
+### I.4.3 — Latency Implications
+
+The HTTP bridge adds a small but measurable overhead per interaction:
+
+| Step | Time on LAN |
+|------|-------------|
+| TCP/HTTP round trip (LAN) | 5–30 ms |
+| JSON serialise / deserialise | 1–5 ms |
+| Base64 encode / decode (5 s of audio at 16 kHz mono) | 10–20 ms |
+| **Total bridge overhead per interaction** | **~20–50 ms** |
+
+This is comfortably inside the 1–3 s budget. For comparison, the LLM call itself takes 500–2000 ms.
+
+### I.4.4 — When You'd Want a Different Pattern
+
+Switch off the HTTP bridge if:
+
+- You need **sub-100 ms** end-to-end (token streaming for real-time conversation). Use a WebSocket pattern.
+- You're on **NAOqi 2.9 + Android**. Use QiSDK (Java/Kotlin), bypass the bridge entirely.
+- You're integrating with **ROS2 Nav2**. Use `naoqi_driver2` so the robot participates in the ROS2 message graph.
+
+For a typical Pepper + LLM HRI study, the HTTP bridge is the sweet spot.
+
+### I.4.5 — Anatomy of One HTTP Round-Trip
+
+**Request from `naoqi_client.py`:**
+
+```
+POST /interact HTTP/1.1
+Host: 192.168.1.50:5000
+Content-Type: application/json
+Content-Length: ~140000        # about 100 KB of base64 audio
+
+{
+  "audio":          "UklGRiQ...",   # 5 s of 16 kHz WAV ~ 100 KB raw -> ~135 KB b64
+  "participant_id": "P001",
+  "session_id":     "9c2e-abc123",
+  "condition":      "C",
+  "rag_enabled":    true
+}
+```
+
+**Response from `app.py`:**
+
+```
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "speech":      "Room 305 is on the third floor on your left.",
+  "gesture":     "point_left",
+  "emotion_led": "#00AAFF",
+  "metadata": {
+    "task_type":   "navigation",
+    "model_id":    "openai-gpt4o-mini",
+    "rag_enabled": true
+  }
+}
+```
+
+\newpage
+
+## I.5 — Sibling HTTP-Bridge Projects: Cross-Validation
+
+> *§I.4 chose Pattern 1 (HTTP/REST bridge) by surveying the literature. Five independent public projects use the same pattern. Reading their READMEs is the fastest way to cross-check OmniLLM's architecture and spot ideas it has not yet adopted.*
+
+| Project | Stack | What OmniLLM can borrow |
+|---------|-------|--------------------------|
+| **ilabsweden/pepperchat** | Py2 `module_commandable.py` on robot, Py3 `dispatcher.py` external, OpenAI ChatGPT | Uses NAOqi `ALAutonomousLife` to switch focus to a dedicated `nao_focus` — **prevents Pepper's built-in dialogue from talking over your LLM**. OmniLLM does not currently set Autonomous Life mode; the participant may hear Pepper's stock greeting drowning the LLM response. **Fix is one line in `naoqi_client.py`: `ALAutonomousLife.setState("disabled")` after connect, before the greeting.** |
+| **UoA-CARES/Pepper-GPT** | Py3 "Black Box" (Whisper + GPT-3.5), Py2 "Pepper Controller" over VPN, NAOqi 2.1.4.13 | Documents the `libboost_regex` install error explicitly — the same family of errors hits the Windows 11 pynaoqi install. Their pinning of NAOqi 2.1.4.13 confirms our 2.5.5.5 choice is *not* the only valid path. |
+| **UoA-CARES/pepper-demo** | Choregraphe 2.5.10.7 + PyNAOqi, Pepper 1.8 | Documents a hard-to-find ZLIB symlink fix (`libz.so.1` ↔ system) for Choregraphe on Linux. Save this for the day you move the AI server to a Linux box. |
+| **igor-lirussi/Dialogue-Pepper-Robot** | Java AIML engine + Py2 NAOqi + separate speech-recognition service | The clean split between *dialogue engine* and *speech-recognition service* (parallel processes, robot IP as a CLI flag) is what OmniLLM already does; their architectural rule is worth citing in the thesis. |
+| **softbankroboticstraining/pepper-chatbot-api** (Pepper Chat) | NAOqi 2.5 + Google Dialogflow v2 (JSON keypath) | Documents **QiChat voice-shaping commands** (pause, speed, pitch, emotional intonation) that OmniLLM does not yet exercise. These could be added to `naoqi_client.py`'s `say()` wrapper for affective speech without leaving Pepper's TTS. |
+
+**Direct cross-validation finding.** Every one of the five projects ends up with the same two-process topology OmniLLM uses. The *variation* is in (a) which LLM provider they use, and (b) whether they suppress Pepper's Autonomous Life default behaviour. OmniLLM is **ahead** on (a) — its multi-provider router covers ground none of the others touch — and **behind** on (b). One-line fix: disable Autonomous Life on connect.
+
+\newpage
+
+## I.6 — Curated External Resources (Pepper-Specific)
+
+> *Resources organised by the recurring problem buckets every Pepper + LLM project meets. Each entry: link + one-line "why it matters."*
+
+### NAOqi 2.5 / Python 2.7 install hardening
+
+| Resource | Why it matters |
+|----------|----------------|
+| `AnonKour/pynaoqi` (GitHub) | Linux mirror of the Python 2.7 NAOqi SDK; keep the URL in case the official mirror disappears post-Aldebaran bankruptcy |
+| `nlp.fi.muni.cz/trac/pepper/wiki/InstallationInstructions` | Masaryk University NLP lab guide — `pyenv_install.sh` for isolated Python 2 (Anaconda is incompatible with NAOqi) |
+| `incognite-lab/Pepper-Controller` | Wraps ~60 NAOqi methods into a single domain-partitioned Python class — a model for refactoring `naoqi_client.py` |
+| `maxtronics.com/en/support/kb/category/pepper/downloads-softwares/` | Post-bankruptcy mirror of Pepper 2.5 & 2.9 downloads; most reliable place to re-fetch Choregraphe and the SDK |
+
+### Navigation, mobility, guided-tour extensions
+
+| Resource | Why it matters |
+|----------|----------------|
+| `softbankrobotics-labs/pepper-proactive-mobility` | Pepper autonomously approaches people and returns home; supports three localisation modes (homing, ARUCO, on-board SLAM) |
+| `softbankrobotics-labs/pepper-aruco` and `pepper-aruco-automapping` | ARUCO marker library through QiSDK; print one marker per "room" and Pepper can both speak *and* walk to "Room 305" |
+| `aldebaran/naoqi_navigation_samples` | Choregraphe `.pml` projects for `explore`, `patrol`, and `places`. `places` is the most directly useful — named locations + walk-between |
+| `ros-naoqi/naoqi_bridge` and `naoqi_driver2` | Republishes NAOqi services as ROS topics; entry into Nav2 |
+
+### Multilingual voice (Japanese-voice question)
+
+| Resource | Why it matters |
+|----------|----------------|
+| **VOICEVOX** (open-source) | MIT-licensed modern neural TTS for Japanese; runs locally on the same GPU you use for Whisper. **Practical 2026 choice for Japanese.** |
+| Open JTalk + HTS voices | Alternative open Japanese TTS; older HTS-HMM family |
+| Voisona Pepper voice library | Pepper-character *singing-voice* library; **NOT suitable** for conversational TTS — only for outreach demos |
+
+### Vision-side extensions
+
+| Resource | Why it matters |
+|----------|----------------|
+| `ageitgey/face_recognition` | dlib-based, 99.38% on LFW. Python 3 only. Practical choice for a `/recognise_face` endpoint that returns a participant ID |
+| `LucaCorvitto/Emotional_Pepper` | PDDL-planned emotional behaviour — hybrid LLM-content + planner-mood inspiration |
+| `softbankrobotics-labs/pepper-mask-detection` and `pepper-deep-learning` | NAOqi 2.9 / QiSDK only — relevant if migrating to NAOqi 2.9 |
+
+### Dialogue platforms and ASR (pre-LLM, still instructive)
+
+| Resource | Why it matters |
+|----------|----------------|
+| `softbankroboticstraining/pepper-chatbot-api` | Documents QiChat voice-shaping (pause, speed, pitch, emotional intonation) — affective TTS extension |
+| `TheRARELab/langex` | Choregraphe template for reproducible language-HRI experiments — borrow filename and header conventions |
+| `softbankrobotics-labs/pepper-solitaries-loop` | Idle animations for between-turn liveliness — fixes the uncanny-when-still-between-turns problem |
+| Pepper + Dialogflow integration (blogemtech Medium) | Documents silence detection (essential for variable-length turns) + amplitude threshold values (14000 at 16 kHz mono) |
+
+### Validation suites, curricula, HRI reference datasets
+
+| Resource | Why it matters |
+|----------|----------------|
+| `robocupathomeedu.org` RoboCup@Home Education | External rubric of service-robot tasks (person following, object handover, instruction following, room-to-room navigation) — use to scope thesis claims |
+| **ROBO-GAP** (Perugia et al. 2022, HRI ACM/IEEE) — `robo-gap.unisi.it` | Peer-reviewed dataset of perceived age, femininity, masculinity, gender-neutrality across 251 robots **including Pepper**. **Use as a control variable in the thesis.** ICC reliability 0.896–0.954. |
+| **CARESSES** (`caressesrobot.org`) | Pepper used for *culturally competent* elder care (UK / Japan / India) — entry point for cultural-HRI framing. Cite the Bruno/Sgorbissa publications via Google Scholar. |
+
+### Aldebaran / NAOqi reference docs
+
+| Resource | Why it matters |
+|----------|----------------|
+| `doc.aldebaran.com/2-5/` | Canonical NAOqi 2.5 reference — bookmark the Service Pages (ALMotion, ALAnimatedSpeech, ALMemory, ALAudioDevice) |
+| `doc.aldebaran.com/2-5/getting_started/index.html` | The "first 10 minutes with Pepper" reference |
+| `github.com/orgs/aldebaran/repositories` | `libqi`, `libqi-python`, `qibuild` (still maintained April 2026); `robot-jumpstarter` is the best Python starter |
+| `groups.google.com/g/ros-sig-aldebaran` | Slow but active community list — best place to ask `naoqi_driver2` questions |
+
+### Emotion-adaptive proxemics (research-grade extension)
+
+| Resource | Why it matters |
+|----------|----------------|
+| `arxiv.org/abs/2401.17663` (Bilen et al. 2024) | "Social Robot Navigation with Adaptive Proxemics Based on Emotions" — empirical basis for tying detected emotion to approach distance (relevant if you build the Wayfinder extension in §I.4 / Chapter 33) |
+
+\newpage
+
+## I.7 — A One-Liner for Each Quick-Win Improvement
+
+Ranked by ease and research payoff:
+
+| Improvement | Effort | Research payoff | Source |
+|-------------|--------|-----------------|--------|
+| Disable Autonomous Life on connect (kill stock dialogue) | 1 line in `naoqi_client.py` | Removes a confound that all five sibling projects have already fixed | §I.5, ilabsweden |
+| Add solitaries / idle animations loop | ~30 LoC | Perceived liveliness during long sessions | §I.6, SoftBank Labs |
+| Silence-detected audio capture (replace fixed 5 s window) | ~80 LoC | Lets the participant pause/think without truncation | §I.6, Dialogflow article |
+| VOICEVOX Japanese TTS provider | new `tts/voicevox.py` | Unlocks Japanese-language Arena condition with modern voice | §I.6 |
+| Face-recognition endpoint (`/recognise_face`) via `ageitgey/face_recognition` | new endpoint + Py3 dependency | Eliminates manual participant-ID entry; enables personalised greeting | §I.6 |
+| ARUCO + `places/` navigation as a new task type | new task + 4 Choregraphe behaviours | Tests escorting vs. pointing — novel HRI finding | §I.6 |
+| ROS 2 bridge via `naoqi_driver2` | new `naoqi_client_ros2/` package | Opens fleet / multi-robot experiments | §I.6 |
+| Migration to NAOqi 2.9 + QiSDK (Kotlin) | full robot-side rewrite | Future-proofs against pynaoqi rot | §I.6 |
+
+The first three rows are quick wins worth doing before the next participant cohort. Rows 4–6 are dissertation-chapter-scale extensions. Rows 7–8 are post-thesis directions.
+
+\newpage
+
+\newpage
+
+# Appendix J — AI-Stack Library Rationale
+
+> *Chapter 8 listed every direct dependency in a one-line table. This appendix expands each one into a paragraph: **what it is, why we picked it, what we'd have used otherwise, and where in the codebase it lives.** Read this when you need to defend a tooling choice or evaluate a replacement.*
+
+\newpage
+
+## J.1 — LiteLLM
+
+**What it is.** A Python library that exposes 100+ LLM providers behind one identical function call. You pass `model="openai/gpt-4o"` or `model="anthropic/claude-haiku"` or `model="ollama/llama3:8b"` — the call signature is the same.
+
+**Why we picked it.** Without it, OmniLLM would need separate adapter code for each provider, each with its own pagination, error-handling, and token-counting quirks. LiteLLM normalises this in one library that's actively maintained by BerriAI. The cost-per-token table is built in, the async API is uniform, and the provider prefix system (`ollama/`, `gemini/`, `anthropic/`) is intuitive once you've learned it.
+
+**Alternatives considered.** Direct provider SDKs (`openai`, `anthropic`, `google-generativeai`) — more control, more code; the gateway alone would have been 800 lines instead of 270. **`aisuite`** (Andrew Ng's lightweight alternative) — smaller, but covers fewer providers and no Ollama. **`openrouter`** — a paid hosted gateway with similar surface but you must route through their cloud. LiteLLM was the lowest-friction choice for a self-hosted setup.
+
+**Where used.** Imported by [omnillm/gateway.py](../omnillm/gateway.py). Every LLM call in the entire project funnels through `litellm.acompletion(...)`.
+
+\newpage
+
+## J.2 — LangGraph
+
+**What it is.** A library on top of LangChain for building **stateful agent graphs** — directed graphs whose nodes are async functions sharing a single state dict, with conditional edges between them. Visualisable as Mermaid or Graphviz at runtime.
+
+**Why we picked it.** OmniLLM's HRI pipeline is genuinely a graph (transcribe → detect → classify → branch → answer → plan → log) with conditional routing. Writing this as one 200-line `async` function with `if/elif` branches would work but be untestable, unreadable, and impossible to visualise. LangGraph gives us named nodes, a typed state dataclass, and `add_conditional_edges` for the T1/T2/T3/T4 branch point.
+
+**Alternatives considered.** **Plain async functions** — more verbose, no diagram. **LangChain's deprecated `AgentExecutor`** — limited routing, deprecated in favour of LangGraph itself. **Custom DAG libraries** (`prefect`, `airflow`) — overkill, batch-oriented, don't compose well with async. LangGraph was the only framework purpose-built for async LLM-node graphs.
+
+**Where used.** [omnillm/hri/agent_graph.py](../omnillm/hri/agent_graph.py). The 9-node pipeline that is Pepper's brain.
+
+\newpage
+
+## J.3 — ChromaDB
+
+**What it is.** A pure-Python embedded vector database. Stores embeddings + their source text + metadata in a local SQLite file. Supports cosine similarity search with HNSW indexing.
+
+**Why we picked it.** Embedded (no separate process), persistent across restarts, zero configuration, pip-installable. For a single researcher with a < 10 k-document knowledge base, this is plenty. The fallback path — keyword search over in-memory documents — also lives in the same file (`RAGPipeline._retrieve_keyword`), so the rest of the pipeline is unaffected if ChromaDB fails to load.
+
+**Alternatives considered.** **Qdrant**, **Weaviate**, **Pinecone** — heavier, require running a server (Docker or cloud). **FAISS** — fast but lower-level, no metadata filtering, requires a C++ build chain. **LanceDB** — newer, comparable; we briefly evaluated it but ChromaDB's documentation maturity won. For OmniLLM's ~50-chunk DIBRIS knowledge base, the speed difference between any of these is irrelevant.
+
+**Where used.** [omnillm/rag/pipeline.py](../omnillm/rag/pipeline.py). One `Collection` per running pipeline.
+
+\newpage
+
+## J.4 — LangChain
+
+**What it is.** A broader framework for LLM apps. OmniLLM uses **only** its document loaders (`PyPDFLoader`, `CSVLoader`, `TextLoader`) and the `RecursiveCharacterTextSplitter` — **not** the larger Chain or Agent abstractions, which are opinionated and easy to outgrow.
+
+**Why we picked it.** The document loaders save dozens of lines per file format. They're tested by a large community and they normalise output so each chunk has `.page_content` and `.metadata` — making the rest of the RAG pipeline cleaner. The text splitter handles edge cases (Unicode normalisation, sentence-boundary detection) that we'd otherwise re-implement.
+
+**Alternatives considered.** **Write our own loaders.** For PDFs, use `pypdf` directly (which we already do as a fallback). For CSVs, use `pandas`. We could do this — but LangChain's loaders normalise the output shape, which makes downstream code simpler. We deliberately do *not* use LangChain's `Chain` classes, `LCEL`, or `RunnableLambda` — those abstractions are powerful but opinionated, and LangGraph (J.2) is the more appropriate orchestration layer.
+
+**Where used.** [omnillm/rag/pipeline.py](../omnillm/rag/pipeline.py) for document loading and chunking.
+
+\newpage
+
+## J.5 — sentence-transformers
+
+**What it is.** A Python library that turns text into embedding vectors using small (~100 MB), fast, locally-runnable models. Default model: `all-MiniLM-L6-v2` (384-dimensional embeddings, 23 MB on disk).
+
+**Why we picked it.** ChromaDB's default embedding is `all-MiniLM-L6-v2` from sentence-transformers — **fast (~5 ms per short text on CPU), small, and free**. No need to pay OpenAI for embeddings during indexing. The model is multilingual-aware enough for the DIBRIS knowledge base.
+
+**Alternatives considered.** **OpenAI's `text-embedding-3-small` API** — higher-quality embeddings (~10–15% better on the MTEB benchmark), $0.02 per million tokens, requires internet. For a small lab KB of ~50 chunks, the quality difference does not justify the cost or the cloud round-trip. **Cohere embeddings** — similar trade-off. **BGE-large** (sentence-transformers can load it) — 5× larger, ~3× slower, marginally better; not worth it at our scale.
+
+**Where used.** Indirectly via ChromaDB.
+
+\newpage
+
+## J.6 — OpenAI Whisper
+
+**What it is.** A speech-to-text model trained by OpenAI on 680,000 hours of multilingual audio. Available as a downloadable model (`pip install openai-whisper`) **or** via the OpenAI cloud API. OmniLLM uses the local download.
+
+**Why we picked it.** Best-in-class accuracy at the **multilingual** level, robust to noise, free if you run it locally. Pepper's onboard `ALSpeechRecognition` is widely regarded as unusable for open-domain speech. Running Whisper locally also keeps participant audio off third-party servers — a meaningful GDPR concern.
+
+**Alternatives considered.** **Vosk** (lighter, fully offline, lower accuracy on Italian/French). **Google Speech-to-Text API** (cloud, faster, GDPR-flagged). **Faster-Whisper** (a 4× faster C++ port — recommended for production deployments but adds setup complexity). For a research prototype, plain Whisper is the right pick.
+
+**Where used.** [omnillm/robotics/whisper_stt.py](../omnillm/robotics/whisper_stt.py). Called by the agent graph's `transcribe_audio` node and by the `/transcribe` HTTP endpoint.
+
+\newpage
+
+## J.7 — asyncio
+
+**What it is.** Python's **standard-library** module for non-blocking I/O. `async def` declares a coroutine; `await` pauses it until an I/O operation completes; `asyncio.gather(...)` runs many coroutines concurrently.
+
+**Why we picked it.** LLM calls are I/O-bound — most of the time is spent waiting for the network. Asyncio lets us query 5 models in the wall-clock time of the slowest one, not the sum. Condition D's 3-model council finishes in ~1.8 s instead of ~5.4 s thanks to this single design choice.
+
+**Alternatives considered.** **Threading** — works but introduces GIL contention and shared-state bugs. **multiprocessing** — overkill for I/O work, slow startup, no easy state sharing. **Trio** / **Curio** — better async APIs in some respects but smaller ecosystems; LangGraph and litellm both use asyncio. For pure-I/O work, asyncio wins.
+
+**Where used.** Pervasive — [gateway.py](../omnillm/gateway.py), [consensus.py](../omnillm/consensus.py), [evaluator.py](../omnillm/evaluator.py), [agent_graph.py](../omnillm/hri/agent_graph.py), [server/app.py](../omnillm/server/app.py), [robotics/pepper.py](../omnillm/robotics/pepper.py).
+
+\newpage
+
+## J.8 — Flask
+
+**What it is.** A minimalist Python web framework. Serves HTTP endpoints with decorators (`@app.route("/path", methods=[...])`).
+
+**Why we picked it.** Tiny, well-documented, easy to test, single-worker is the right concurrency model for one robot. The synchronous-to-async bridge (`_run_async`) inside the Flask app is six lines of code.
+
+**Alternatives considered.** **FastAPI** (async-native, faster, more modern) — genuinely better for high-throughput services with auto-generated OpenAPI docs. We didn't pick it because Flask's simplicity matched the single-robot single-worker use case, and the dependency footprint is smaller (Flask + Jinja vs FastAPI + Pydantic + Starlette + uvicorn). **Bottle** — even smaller than Flask but less mature ecosystem. **Django** — orders of magnitude too heavy. If you ever serve many robots simultaneously, swap to FastAPI + uvicorn (the migration is ~30 lines).
+
+**Where used.** [omnillm/server/app.py](../omnillm/server/app.py). Six endpoints.
+
+\newpage
+
+## J.9 — Click
+
+**What it is.** A Python library for building command-line interfaces with decorators (`@click.command`, `@click.option`, `@click.group`). Auto-generates `--help`.
+
+**Why we picked it.** Better than `argparse` (less boilerplate per command), supports nested command groups (`omnillm ask`, `omnillm evaluate`, `omnillm leaderboard`), auto-generates type-aware `--help` text, and integrates cleanly with `rich` for coloured output.
+
+**Alternatives considered.** **Typer** (built on Click, uses type hints — slightly nicer for greenfield projects). Genuinely tempting; we stayed on Click for consistency with the broader Python ecosystem where Click is more familiar. **argparse** (stdlib, more verbose). **Fire** (auto-generates CLI from any Python class — magic, opinionated).
+
+**Where used.** [omnillm/cli.py](../omnillm/cli.py). Every `omnillm` subcommand.
+
+\newpage
+
+## J.10 — Rich
+
+**What it is.** A Python library for beautiful coloured terminal output — tables, panels, progress bars, syntax-highlighted code, markdown rendering, tracebacks.
+
+**Why we picked it.** OmniLLM's CLI is a research dashboard. A coloured table of model latencies is dramatically more readable than `print(dict)`. Rich is the de-facto standard for Python CLI UX in 2026.
+
+**Alternatives considered.** **tabulate** (tables only, ASCII-art). **prettytable** (similar to tabulate). **Plain `print()`** (grey, unreadable for long output). None of these get close to Rich's quality.
+
+**Where used.** [omnillm/cli.py](../omnillm/cli.py). Every command that emits structured output.
+
+\newpage
+
+## J.11 — Ollama
+
+**What it is.** A free local LLM runtime. `ollama serve` starts a daemon on `localhost:11434`; `ollama pull llama3:8b` downloads a model; `ollama list` shows what's installed. Exposes an OpenAI-compatible HTTP API.
+
+**Why we picked it.** Free, private, fast on a laptop with a GPU (and acceptable on CPU). The Condition B (Fixed Local LLM) experimental condition **depends on it** — without Ollama there is no "no-API-key baseline." The OpenAI-compatible API means LiteLLM speaks to it via the same `openai/` prefix machinery.
+
+**Alternatives considered.** **vLLM** (faster, GPU-required, more setup). **LM Studio** (GUI, less scriptable). **GGUF + llama.cpp** directly (more control, more setup). **Text-Generation-WebUI** (heavyweight). Ollama is the easiest for a research lab and the only one with one-line install on Windows.
+
+**Where used.** Via LiteLLM in [omnillm/gateway.py](../omnillm/gateway.py). Models registered in [config/models.yaml](../config/models.yaml) with `provider: ollama`. Required for Condition B.
+
+\newpage
+
+## J.12 — ReportLab + xhtml2pdf
+
+**What they are.** Two pure-Python libraries that together produce PDFs from HTML. **xhtml2pdf** orchestrates: it accepts an HTML string + CSS and emits a PDF. **ReportLab** does the actual page-laying-out. We register **DejaVu Sans + DejaVu Sans Mono** with ReportLab so Unicode glyphs (arrows, box-drawing characters, accented Latin) render correctly inside the PDF.
+
+**Why we picked them.** **No native dependencies** (no `libgobject`, Pango, Cairo, or wkhtmltopdf binary) — installable on Windows with pip alone. WeasyPrint produces visually better output but requires GTK on Windows which is a multi-hour install per machine. xhtml2pdf is the **lowest-friction choice** for cross-platform PDF generation.
+
+**Alternatives considered.** **WeasyPrint** (best quality, needs GTK). **wkhtmltopdf** (good quality, separate ~100 MB binary, increasingly bit-rotted). **mPDF** (PHP). **LaTeX** (best quality, huge install, complex source files). For a thesis-supporting reference book that must be rebuildable in five minutes on any machine, xhtml2pdf wins.
+
+**Where used.** [book2/build_pdf.py](../book2/build_pdf.py). Run after editing any of the 16 source files.
+
+\newpage
+
+## J.13 — pytest, pytest-asyncio, pytest-mock
+
+**What they are.** The Python testing trinity. **pytest** is the framework; **pytest-asyncio** runs `async def test_…` functions; **pytest-mock** provides the `mocker` fixture for patching dependencies.
+
+**Why we picked them.** Standard in the Python ecosystem. The 289 tests in [tests/](../tests/) run in ~5 seconds without a single real API call — because pytest-mock fakes out the LLM calls and the robot bridge. This is how the codebase can be CI'd on a laptop with zero LLM cost and zero hardware.
+
+**Alternatives considered.** **unittest** (stdlib, more verbose, worse fixtures). **nose2** (largely abandoned). **Hypothesis** for property-based tests (we use a tiny bit, indirectly, via `pytest-randomly` for ordering robustness). pytest is the only framework in active mainstream Python use.
+
+**Where used.** [tests/](../tests/). All 11 test files.
+
+\newpage
+
+## J.14 — pyyaml
+
+**What it is.** Python's YAML parser. Reads `.yaml` files into nested Python dicts/lists.
+
+**Why we picked it.** YAML is the right format for the model registry and benchmark tasks: human-editable, comment-friendly, supports lists and nested dicts without the verbosity of XML. pyyaml is the canonical Python parser.
+
+**Alternatives considered.** **ruamel.yaml** (preserves comments on round-trip — useful for code-modifying-YAML, irrelevant for us). **TOML** (no nested-list support, weaker for the routing config). **JSON** (no comments — disqualifying for human-edited configs).
+
+**Where used.** [omnillm/gateway.py](../omnillm/gateway.py) and [omnillm/router.py](../omnillm/router.py) load [config/models.yaml](../config/models.yaml).
+
+\newpage
+
+## J.15 — python-dotenv
+
+**What it is.** Loads environment variables from a `.env` file into the process's `os.environ`. Called once at startup.
+
+**Why we picked it.** API keys must never be hard-coded or committed to git. The standard pattern is `.env.example` (committed, no real keys) plus a local `.env` (in `.gitignore`, contains real keys). python-dotenv reads `.env` so application code can `os.environ.get("OPENAI_API_KEY")` without knowing where it came from.
+
+**Alternatives considered.** **Reading the keys from a YAML config** — pulls them into a file format we already use, but makes accidental commits more likely. **OS-level env vars** — works but requires the user to set them in their shell profile, which is platform-specific.
+
+**Where used.** Imported once in [omnillm/cli.py](../omnillm/cli.py) and [omnillm/server/app.py](../omnillm/server/app.py).
+
+\newpage
+
+## J.16 — aiohttp
+
+**What it is.** A Python library for asynchronous HTTP — both client and server. The async equivalent of `requests`.
+
+**Why we picked it.** [omnillm/robotics/pepper.py](../omnillm/robotics/pepper.py) is async (because LangGraph is async). The bridge client therefore needs an async HTTP library. `requests` is synchronous and would block the event loop.
+
+**Alternatives considered.** **httpx** (similar feature set; we briefly evaluated it). **Curl-via-subprocess** (would work, ugly). aiohttp was the first to mature and is what LiteLLM also uses internally.
+
+**Where used.** [omnillm/robotics/pepper.py](../omnillm/robotics/pepper.py) — `_post`, `_get`, `_ping_bridge_server`.
+
+\newpage
+
+## J.17 — markdown (the python-markdown library)
+
+**What it is.** Python's most-popular Markdown → HTML converter. Supports extensions: `tables`, `fenced_code`, `codehilite` (syntax highlighting), `toc` (auto table of contents), `sane_lists`.
+
+**Why we picked it.** Used by [book2/build_pdf.py](../book2/build_pdf.py) to turn the assembled `OmniLLM_Book.md` into HTML before xhtml2pdf renders it to PDF. The extension list above is the canonical "reads like GitHub Markdown" config.
+
+**Alternatives considered.** **mistune** (faster). **commonmark-py** (stricter CommonMark). **pandoc** (best quality but requires the pandoc binary, defeats the pure-Python promise). For our scale, the difference is invisible.
+
+**Where used.** [book2/build_pdf.py](../book2/build_pdf.py).
+
+\newpage
+
+## J.18 — pypdf
+
+**What it is.** Python library for reading and (limited) writing of PDF files. OmniLLM uses only the reading side: extracting text per page from PDF documents in the knowledge base.
+
+**Why we picked it.** Pure Python, no native dependencies, handles the PDF formats we encounter. ChromaDB's persistence already pulls in a SQLite dependency; we wanted the PDF reading path to add no new native deps.
+
+**Alternatives considered.** **PyMuPDF** (`fitz`) — faster, better quality, requires native build chain. **pdfplumber** (better at tables). **pdf2text** subprocess (Linux-only). For occasional PDF indexing during RAG setup, pypdf is sufficient.
+
+**Where used.** [omnillm/rag/pipeline.py](../omnillm/rag/pipeline.py) — `_index_pdf` method.
+
+\newpage
+
+## J.19 — langdetect
+
+**What it is.** A Python port of Google's language-detection library. Statistical n-gram classifier; supports ~55 languages.
+
+**Why we picked it.** A backup signal in [omnillm/hri/language_detector.py](../omnillm/hri/language_detector.py). The first-pass language detection is Unicode-script-based (super fast); the second pass is high-frequency-word matching for Latin-script languages; **langdetect** is the third-tier fallback when the first two fail.
+
+**Alternatives considered.** **fasttext-langid** (better accuracy, larger model — but adds a 1 GB binary). **whisper-detect-language** (Whisper itself returns a language probability — we could use this, but only after transcription; the rule-based path is faster and works without audio). **langid.py** (similar feature set, less maintained).
+
+**Where used.** [omnillm/hri/language_detector.py](../omnillm/hri/language_detector.py) — `_try_langdetect()` fallback.
+
+\newpage
+
+## J.20 — Why We Did NOT Use…
+
+A short anti-resume:
+
+| Library | Why we did not use it |
+|---|---|
+| **LangChain Chains, LCEL, RunnableLambda** | LangGraph (J.2) is the more appropriate orchestration layer; LangChain's chains are opinionated and easy to outgrow. |
+| **ROS / ROS 2** | 4–8 GB install footprint; Python version trap (ROS 1 = Py2, ROS 2 = Py3.8+); cross-platform fragility. The HTTP bridge is sufficient at our scale. |
+| **Docker** | Adds setup friction for a single-developer thesis project. The repo runs with `pip install -e .` and that's it. A `Dockerfile` is a one-day add-on if needed. |
+| **Pydantic** | We use plain `@dataclass` everywhere. Pydantic gives us runtime validation we don't need for trusted internal data, at the cost of an extra dependency and slower import time. |
+| **Celery / RQ** | No background-job queue is needed; the interaction-per-request shape fits Flask's sync model. |
+| **Redis** | No cross-process state to share. ChromaDB's SQLite file is the only persistent state. |
+| **PostgreSQL / any RDBMS** | All persistent data is small enough to live in JSON-Lines + CSV files. The analysis pipeline (Chapter 30) loads them into pandas. |
+| **scikit-learn / PyTorch / TensorFlow** | We are *evaluating* models, not training them. Adding ML frameworks would imply we should be training, which we explicitly are not. |
+
+The pattern: **OmniLLM is intentionally small.** Every dependency must earn its place by being the most-direct solution to a real problem, not a "we might need this later" hedge.
+
+\newpage
+
+\newpage
+
+# Appendix K — Walkthroughs, Feature Catalogue, and Execution Plans
+
+> *This appendix is for the reader who wants concrete, granular detail. Five sections: a line-by-line trace of one question through the code, a complete worked first-session example, the eight evaluation axes enumerated, a complete feature reference catalogue, and a one-month study execution plan distinct from the 13-week build plan in Chapter 22.*
+
+\newpage
+
+## K.1 — Reading the Code: A Single Question's Journey, Line by Line
+
+> *Take one user input — "Where is Room 305?" — and trace it through every Python function that touches it. If you can read this section top to bottom and recognise every step, you understand OmniLLM.*
+
+### K.1.1 — The Scenario
+
+You are running:
+
+```powershell
+# Terminal 1
+python -m omnillm.server.app
+
+# Terminal 2 (drives the AI server with curl)
+curl -X POST http://localhost:5000/interact `
+  -H "Content-Type: application/json" `
+  -d '{"text": "Where is Room 305?",
+       "participant_id": "DEMO",
+       "session_id": "demo-1",
+       "condition": "C",
+       "rag_enabled": true}'
+```
+
+What happens between the `curl` and the JSON response?
+
+### K.1.2 — Stage 1 — Flask Receives the Request
+
+**File: `omnillm/server/app.py`, function `interact()`**
+
+Flask matches `POST /interact` to a Python function. The body is parsed from JSON into a dict:
+
+```python
+@app.route("/interact", methods=["POST"])
+def interact():
+    data = request.get_json(force=True) or {}
+    utterance = data.get("text", "")            # "Where is Room 305?"
+    audio_b64 = data.get("audio", "")           # "" (text-only)
+    participant_id = data.get("participant_id", "unknown")
+    session_id = data.get("session_id", "")
+    condition = data.get("condition", "A")
+    rag_enabled = bool(data.get("rag_enabled", True) and rag is not None)
+```
+
+**Python notes for beginners:**
+
+- `@app.route(...)` is a **decorator**. It wraps the function below it with Flask's URL routing logic. The function is still callable directly, but Flask also knows "if a `POST /interact` comes in, call `interact`".
+- `data.get("text", "")` returns `data["text"]` if it exists, otherwise `""`. This is **safer than `data["text"]`** because the latter raises `KeyError` if the field is missing.
+
+### K.1.3 — Stage 2 — Resolve the Per-Condition Model, Hand Off to LangGraph
+
+**Same file, same function (continued)**
+
+```python
+audio_bytes = base64.b64decode(audio_b64) if audio_b64 else b""
+
+# Resolve the per-condition model BEFORE invoking the graph.
+from omnillm.hri.experiment import CONDITION_CONFIGS, ExperimentCondition
+cond_cfg = CONDITION_CONFIGS.get(ExperimentCondition(condition))
+effective_model = (cond_cfg.model_id if cond_cfg and cond_cfg.model_id
+                                     else _default_model)
+
+graph = _get_graph()
+if graph is not None:
+    state = {
+        "utterance": utterance,
+        "audio_bytes": audio_bytes,
+        "participant_id": participant_id,
+        "session_id": session_id,
+        "condition": condition,
+        "rag_enabled": rag_enabled,
+        "model_id": effective_model,             # <-- the May-2026 fix
+    }
+    result = _run_async(graph.ainvoke(state))
+    return jsonify(result.get("robot_action",
+                              {"speech": result.get("response_text", "")}))
+```
+
+**What's happening:**
+
+- The condition lookup ensures Condition B's `llama3-8b-local` actually reaches the LLM call inside the graph (the May 2026 fix from Chapter 12).
+- `_get_graph()` returns a compiled LangGraph DAG. The first call takes ~10 seconds (imports + compile); subsequent calls are instant.
+- `graph.ainvoke(state)` runs the **entire graph asynchronously** starting from the `state` dict. Each node reads keys it cares about and writes back updates.
+- `_run_async(coro)` is a tiny helper that creates a fresh event loop per request — needed because Flask is synchronous but LangGraph is asynchronous.
+
+### K.1.4 — Stage 3 — Inside the Graph (Node by Node)
+
+The compiled graph:
+
+```
+START
+  v
+transcribe_audio
+  v
+detect_language
+  v
+classify_task
+  v  (conditional)
+  +-> rag           (T1, RAG on)
+  +-> nav_rag       (T2, RAG on)
+  +-> direct_llm    (T3 or condition E)
+  +-> multilingual_llm  (T4)
+  v
+smart_router
+  v
+generate_action_plan
+  v
+log_interaction
+  v
+END
+```
+
+#### Node 1 — `transcribe_audio`
+
+```python
+async def transcribe_audio(state: dict) -> dict:
+    audio = state.get("audio_bytes", b"")
+    if not audio:
+        return {"_start_time": time.monotonic()}     # text-only mode
+    from omnillm.robotics.whisper_stt import WhisperSTT
+    stt = WhisperSTT()
+    utterance = await stt.transcribe(audio)
+    return {"utterance": utterance, "_start_time": time.monotonic()}
+```
+
+Because we passed `text="Where is Room 305?"` (no audio), the node just records the start time and passes through. `_start_time` is what `log_interaction` later subtracts to compute end-to-end latency.
+
+#### Node 2 — `detect_language`
+
+```python
+async def detect_language(state: dict) -> dict:
+    utterance = state.get("utterance", "")
+    from omnillm.hri.language_detector import LanguageDetector
+    detector = LanguageDetector()
+    result = detector.detect(utterance)
+    return {"detected_language": result.language_code}
+```
+
+The detector inspects the script and word frequencies and returns `"en"`. Almost any English text is identified in under 10 ms by Tier 1 (Unicode script check) — no LLM call required.
+
+#### Node 3 — `classify_task`
+
+```python
+async def classify_task(state: dict) -> dict:
+    utterance = state.get("utterance", "")
+    language = state.get("detected_language", "en")
+    from omnillm.hri.classifier import HRITaskClassifier
+    classifier = HRITaskClassifier()
+    result = classifier.classify(utterance, detected_language=language)
+    return {"task_type": result.task_type.value,
+            "task_confidence": result.confidence}
+```
+
+The classifier hits the regex `\broom\s+\d+\b` ("Room 305") and the keyword `where`. Score for **navigation** wins → returns `{"task_type": "navigation", "task_confidence": 0.95}`.
+
+#### Conditional Edge — Pick the Branch
+
+```python
+def _route_by_task_type(state: dict) -> str:
+    task_type = state.get("task_type", "info_retrieval")
+    condition = state.get("condition", "A")
+    rag_enabled = state.get("rag_enabled", True)
+    if condition == "E":
+        return "direct_llm"                       # E always skips RAG
+    routing = {
+        "info_retrieval":      "rag" if rag_enabled else "direct_llm",
+        "navigation":          "nav_rag" if rag_enabled else "direct_llm",
+        "social_conversation": "direct_llm",
+        "multilingual":        "multilingual_llm",
+    }
+    return routing.get(task_type, "direct_llm")
+```
+
+`task_type="navigation"` + `rag_enabled=True` + `condition="C"` → returns `"nav_rag"`. LangGraph dispatches to the `nav_rag` node.
+
+#### Node 4 — `nav_rag` (RAG + Gesture Planner)
+
+```python
+async def run_nav_rag(state: dict) -> dict:
+    utterance = state.get("utterance", "")
+    target_model = state.get("model_id")
+    rag_resp = await rag.query(utterance, model_id=target_model)
+    from omnillm.robotics.gesture_planner import GesturePlanner
+    planner = GesturePlanner()
+    gesture, led = planner.plan("navigation", rag_resp.answer)
+    return {
+        "rag_context":   "\n\n".join(f"[{c.source}]: {c.text}"
+                                       for c in rag_resp.retrieved_chunks),
+        "rag_chunks":    rag_resp.retrieved_chunks,
+        "rag_faithfulness": rag_resp.faithfulness_score,
+        "response_text": rag_resp.answer,
+        "model_id":      rag_resp.model_id,
+        "latency_ms":    rag_resp.latency_ms,
+        "gesture":       gesture,
+        "led_color":     led,
+    }
+```
+
+What `rag.query()` does internally:
+
+1. Convert "Where is Room 305?" into an embedding vector via sentence-transformers.
+2. Search ChromaDB for the 4 most similar chunks from the DIBRIS knowledge base.
+3. Build an augmented prompt: `system + "Use only this context: ..." + user`.
+4. Call `gateway.query(model_id, messages)` — this returns the LLM's answer.
+5. (Optional) Score the answer's faithfulness with a judge LLM.
+
+The result is something like:
+
+```
+"Room 305 is on the third floor of the DIBRIS building. Take the
+elevator on your left, then turn left at the corridor."
+```
+
+Then `planner.plan("navigation", answer)` sees the word "left", picks gesture `point_left`, picks LED `#00AAFF` (calm navigation blue).
+
+#### Node 5 — `smart_router`
+
+For `condition="C"`, the router fires:
+
+```python
+from omnillm.router import SmartRouter, RoutingStrategy
+router = SmartRouter()
+decision = router.route_for_hri_task(
+    hri_task_type="navigation",
+)
+target = decision.model_id     # e.g. "openai-gpt4o-mini" per hri_task_routing
+resp = await gateway.query(target, messages)
+return {"response_text": resp.content, "model_id": resp.model_id, ...}
+```
+
+The router reads `config/models.yaml`'s `hri_task_routing.navigation`. The answer overrides what `nav_rag` produced. (For conditions A, B, E the smart_router node is a no-op — the previous answer wins.)
+
+#### Node 6 — `generate_action_plan`
+
+```python
+async def generate_action_plan(state: dict) -> dict:
+    return {
+        "robot_action": {
+            "speech":       state["response_text"],
+            "gesture":      state["gesture"],
+            "emotion_led":  state["led_color"],
+            "metadata":     {"task_type": state["task_type"],
+                              "model_id":  state["model_id"],
+                              "rag_enabled": state["rag_enabled"]},
+        }
+    }
+```
+
+This is just packaging — the heavy work is done.
+
+#### Node 7 — `log_interaction`
+
+```python
+async def log_interaction(state: dict) -> dict:
+    total_latency = (time.monotonic() - state["_start_time"]) * 1000
+    logger.log_interaction(
+        session_id=state.get("session_id", ""),
+        participant_id=state.get("participant_id", ""),
+        condition=state.get("condition", "A"),
+        task_type=state.get("task_type"),
+        utterance=state.get("utterance", ""),
+        response=state.get("response_text", ""),
+        model_id=state.get("model_id", ""),
+        latency_ms=total_latency,
+        # ...
+    )
+    return {"latency_ms": total_latency}
+```
+
+The logger appends an `InteractionRecord` to disk (JSON-Lines) and to the in-memory list.
+
+### K.1.5 — Stage 4 — Flask Returns the JSON
+
+Back in `app.py`:
+
+```python
+return jsonify(result.get("robot_action", ...))
+```
+
+The dict is serialised to JSON and returned with HTTP 200:
+
+```json
+{
+  "speech": "Room 305 is on the third floor of the DIBRIS building. Take the elevator on your left, then turn left at the corridor.",
+  "gesture": "point_left",
+  "emotion_led": "#00AAFF",
+  "metadata": {
+    "task_type": "navigation",
+    "model_id":  "openai-gpt4o-mini",
+    "rag_enabled": true
+  }
+}
+```
+
+### K.1.6 — Stage 5 — What Pepper Does With It
+
+If a real Pepper is at the other end, `naoqi_client.py` would:
+
+```python
+def _execute_action(self, action):
+    speech    = action.get("speech", "")
+    gesture   = action.get("gesture")
+    led_color = action.get("emotion_led")
+    if led_color: self._set_leds(led_color)
+    if gesture and gesture in GESTURE_TO_BEHAVIOR:
+        self._run_behavior_async(GESTURE_TO_BEHAVIOR[gesture])
+    if speech: self._speak(speech)
+```
+
+- Eyes fade to `#00AAFF` over 300 ms.
+- `ALBehaviorManager.runBehavior("animations/Stand/Gestures/Explain_8")` starts the point-left gesture in a non-blocking thread.
+- `ALAnimatedSpeech.say(speech, {"bodyLanguageMode": "contextual"})` speaks the answer with synchronised arm motion.
+
+### K.1.7 — The Whole Picture
+
+That is one question, end-to-end. Sub-2-second latency (~1.4–1.6 s typical for Condition A/C), all of it logged, every model swap configurable, every step testable in isolation.
+
+If you can find the code for each step in the repository without re-reading this section, you understand OmniLLM.
+
+\newpage
+
+## K.2 — A Complete First Experimental Session — Worked Example
+
+> *A pretend participant P003 walks into the DIBRIS / Sgorbissa lab. We run them through all five conditions of one slot of the Latin square. Every command you'd type, every JSON you'd see, every questionnaire score you'd enter — front to back.*
+
+### K.2.1 — Before the Participant Arrives
+
+```powershell
+# 0. Pre-flight check
+cd C:\Users\akshi\OneDrive\Desktop\OmniLLM
+.\venv\Scripts\Activate.ps1
+
+omnillm models                       # all 19 models load
+pytest tests/ -q | Select-Object -Last 3   # 289 tests pass
+
+# 1. Make sure Pepper is awake (real robot at DIBRIS)
+C:\Python27\python.exe -c "from naoqi import ALProxy; ALProxy('ALMotion','192.168.1.100',9559).wakeUp()"
+
+# 2. Start the AI server (Terminal 1)
+python -m omnillm.server.app --host 0.0.0.0 --port 5000
+```
+
+Expected server log lines:
+
+```
+INFO:omnillm.rag.pipeline:Indexed 12 chunks from lab_info.txt
+INFO:omnillm.rag.pipeline:Indexed 15 chunks from faq.txt
+INFO:omnillm.rag.pipeline:Knowledge base loaded -- 49 total chunks
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+```
+
+```powershell
+# 3. Start the NAOqi bridge (Terminal 2, Python 2.7)
+C:\Python27\python.exe omnillm\server\naoqi_bridge_server.py `
+  --robot-ip 192.168.1.100 --robot-port 9559 `
+  --bind 0.0.0.0 --bridge-port 6000
+```
+
+Confirm both up:
+
+```powershell
+curl http://127.0.0.1:5000/status
+curl http://127.0.0.1:6000/ping
+```
+
+You also have, on the desk:
+
+- 5 paper questionnaire forms (one per condition)
+- 1 final pairwise-preference sheet
+- 2 consent forms
+- 1 GDPR notice
+- The Latin-square sheet that says "P003: conditions C, D, E, A, B in that order"
+
+### K.2.2 — Participant Arrives — Briefing (5 minutes)
+
+> *"Thank you for joining. Today you'll talk with Pepper in five different modes. Each mode has four short interactions. After each mode I'll hand you a brief paper questionnaire. The whole session takes about 30 minutes. You can stop at any time without giving a reason. There are no right or wrong answers — we're studying Pepper, not you. Please sign here..."*
+
+Hand over the consent form and GDPR notice. Note demographics: P003 speaks English and Italian.
+
+### K.2.3 — Run the Experiment Driver
+
+```powershell
+# Terminal 3
+.\venv\Scripts\python.exe scripts\pepper_demo\run_subject_experiment.py `
+    --participant P003 `
+    --server http://127.0.0.1:5000 `
+    --bridge http://127.0.0.1:6000
+```
+
+Progress on screen as conditions cycle (abridged):
+
+```
+Subject experiment -- participant=P003 session=578b023b
+Server: http://127.0.0.1:5000
+Robot bridge: http://127.0.0.1:6000
+
+[01/20] C / T1_info_retrieval: What time does the lab open?
+    -> The lab opens at 08:30 on weekdays...
+    model=openai-gpt4o-mini  path=graph  latency=1430 ms
+    robot: ok
+
+[02/20] C / T2_navigation: Where is the Pepper room at DIBRIS?
+    -> The Pepper room is at the end of the ground-floor corridor...
+    model=openai-gpt4o-mini  path=graph  latency=1590 ms
+    robot: ok
+
+[03/20] C / T3_social: Hello Pepper, how are you today?
+    -> Hello! I'm feeling bright and cheerful today, thank you!
+    model=claude-haiku  path=graph  latency=920 ms
+    robot: ok
+
+[04/20] C / T4_multilingual: Ciao Pepper, dove si trova la stazione di Brignole?
+    -> Ciao! La stazione di Brignole si trova a Genova...
+    model=claude-haiku  path=graph  latency=1980 ms
+    robot: ok
+
+  --- [pause for Condition C questionnaire] ---
+  Press Enter when ready to continue...
+```
+
+You hand the participant the Condition C questionnaire:
+
+```
++-------------------------------------------------------------+
+|  CONDITION C   PARTICIPANT P003                              |
+|                                                              |
+|  Strongly disagree  1  2  3  4  5  6  7  Strongly agree     |
+|                                                              |
+|  Q1 The robot's answers were accurate.        [_] [_] [_] [X] [_] [_] [_]   -> 4
+|  Q2 The robot was natural to talk to.         [_] [_] [_] [_] [_] [X] [_]   -> 6
+|  Q3 I trust the information given to me.     [_] [_] [_] [_] [_] [X] [_]   -> 6
+|  Q4 The robot's gestures were appropriate.    [_] [_] [_] [_] [X] [_] [_]   -> 5
+|  Q5 The robot responded quickly enough.       [_] [_] [_] [_] [_] [X] [_]   -> 6
++-------------------------------------------------------------+
+```
+
+P003 ticks 4/6/6/5/6. Continue with D, E, A, B in their assigned order. At each condition boundary, hand the matching questionnaire, collect after ~60 seconds, press Enter.
+
+### K.2.4 — The Pairwise Preference at Session End
+
+After all 20 interactions, ask three verbal questions:
+
+> *"1. Which of the five Peppers did you prefer overall?"*
+> *"2. Which one felt most natural to talk to?"*
+> *"3. Which one would you most trust to give correct information?"*
+
+P003 answers: "Overall I preferred C. Most natural — also C. Most trustworthy — D, the one that took longer." Record on the final sheet.
+
+This produces seven pairwise records: C wins over A, B, D, E (overall); C wins over A, B, D, E (naturalness); D wins over A, B, C, E (trust). These feed `EloScorer.update_pairwise(...)` later.
+
+### K.2.5 — Save Everything Within the Hour
+
+```powershell
+# Outputs are already at:
+# results/subject_run_P003_<timestamp>.json
+# results/subject_run_P003_<timestamp>.csv
+
+# Move to per-participant folder
+New-Item -ItemType Directory -Path "results/by_participant/P003"
+Move-Item "results/subject_run_P003_*.json" "results/by_participant/P003/"
+Move-Item "results/subject_run_P003_*.csv"  "results/by_participant/P003/"
+
+# Digitise the questionnaires
+python -c @'
+from omnillm.utils.questionnaire import (
+    InteractionQuestionnaire, PairwisePreference, QuestionnaireCollector)
+c = QuestionnaireCollector()
+c.add_interaction_response(InteractionQuestionnaire(
+    session_id="578b023b", participant_id="P003", condition="A",
+    accuracy=6, naturalness=5, trust=6,
+    gesture_appropriateness=5, response_speed=7))
+# ...repeat for B, C, D, E...
+c.add_pairwise_preference(PairwisePreference(
+    session_id="578b023b", participant_id="P003",
+    condition_a="C", condition_b="A", preferred="C"))
+# ...etc for all pairwise records...
+c.save("results/by_participant/P003/questionnaire.json")
+'@
+```
+
+### K.2.6 — What the JSON Logs Look Like
+
+A typical `InteractionRecord` row in the JSON file:
+
+```json
+{
+  "timestamp": "2026-06-12T14:23:51.842Z",
+  "session_id": "578b023b-09af-4da3-a047-e742e25c5913",
+  "participant_id": "P003",
+  "condition": "A",
+  "task_type": "info_retrieval",
+  "utterance": "What time does the lab open?",
+  "response":  "The lab opens at 08:30 on weekdays.",
+  "model_id":  "openai-gpt4o-mini",
+  "latency_ms": 1437.3,
+  "input_tokens": 412,
+  "output_tokens": 13,
+  "cost_usd": 0.0000687,
+  "rag_enabled": true,
+  "rag_faithfulness": 0.94,
+  "rag_chunk_count": 3,
+  "judge_score": 0.91,
+  "task_success": true,
+  "language": "en",
+  "gesture_used": "nod"
+}
+```
+
+After 15 participants × 5 conditions × 4 tasks, you have **300 such rows** plus 75 questionnaire rows plus ~45 pairwise preferences. That is your dataset.
+
+### K.2.7 — Final Backup Step
+
+```powershell
+# Copy results/ to a backup location at the end of every day
+Copy-Item -Recurse -Force "results\" "D:\thesis-backup\results-2026-06-12\"
+```
+
+Data loss after a participant has gone home is the worst-case scenario in HRI studies. Don't be the person it happens to.
+
+\newpage
+
+## K.3 — The Eight Evaluation Axes (Enumerated)
+
+OmniLLM's built-in benchmark tasks (`tasks/sample_tasks.py`) span eight axes chosen to be **orthogonal**: a model that scores high on one does not necessarily score high on the others. These axes power the `omnillm evaluate` command and the leaderboard categories.
+
+| # | Axis | What it measures | Sample tasks |
+|---|------|-----------------|--------------|
+| 1 | **Reasoning** | Multi-step logic, mathematics | Bat-and-ball puzzle; syllogism; Gambler's Fallacy |
+| 2 | **Knowledge** | Factual accuracy | Capital cities; speed of light; DNA discoverers |
+| 3 | **Code** | Generate, debug, explain code | `is_prime`; FizzBuzz; binary search bug |
+| 4 | **Instruction Following** | Strict format / constraints | Numbered list of 5; pure JSON output; exact 3 sentences |
+| 5 | **Safety** | Refusal of harmful / PII requests | Refuse hacking; refuse misinformation; redact PII |
+| 6 | **Robot-Readiness** | Structured JSON for robot control | Generate NAO action plan; parse voice command; ROS2 Nav2 goal |
+| 7 | **Latency** | Time-to-first-token | One-sentence greeting; "Answer with only the number" |
+| 8 | **Cost-Efficiency** | Quality at minimum tokens | Define "recursion" in one sentence; Yes/No questions |
+
+### K.3.1 — The Three Judge Patterns (Recap)
+
+| Pattern | When to use it | Output |
+|---------|----------------|--------|
+| **Referenceless (G-Eval)** | No gold answer; open-ended | Score 0–1 + reasoning |
+| **Reference-Based** | You know the right answer | Score 0–1 + reasoning |
+| **Pairwise** | Comparing two models | Winner: A / B / tie |
+
+### K.3.2 — The Twelve Per-Interaction Metrics (HRI)
+
+Automatically recorded for every Embodied LLM Arena interaction:
+
+1. **Latency** — end-of-utterance to start-of-robot-speech, in ms.
+2. **Input tokens** — prompt token count.
+3. **Output tokens** — completion token count.
+4. **Cost (USD)** — calculated from `models.yaml` pricing.
+5. **RAG retrieval scores** — cosine similarity of top-k chunks.
+6. **RAG faithfulness** — LLM-as-Judge of grounding (0–1).
+7. **Hallucination flag** — word-overlap heuristic.
+8. **LLM-as-Judge quality** — referenceless score (0–1, optional).
+9. **Language detected** — ISO 639-1 code.
+10. **Task classification** — T1/T2/T3/T4 + confidence.
+11. **Model used** — the actual `model_id` (matters for Conditions C and D).
+12. **Gesture used** — what Pepper actually did.
+
+All twelve fields land in `InteractionRecord` and export cleanly to CSV.
+
+### K.3.3 — Composite Scoring (the `BEST_VALUE` Formula)
+
+```
+value = 0.50 * quality + 0.30 * cost_score + 0.20 * latency_score
+```
+
+Where:
+
+- `quality` ∈ [0, 1] from LLM-as-Judge or running mean of past evaluations
+- `cost_score` = `max(0, 1 - cost / 0.05)` (normalised against $0–$0.05 per query)
+- `latency_score` = `max(0, 1 - (latency_ms - 500) / 9500)` (normalised against 500ms–10s)
+
+This is the formula the smart router uses for `BEST_VALUE` strategy. The 50/30/20 weighting was the most stable across all four HRI task types in development; it lives in `_calculate_value_score` and is editable.
+
+\newpage
+
+## K.4 — Complete Feature Reference Catalogue
+
+> *Every shipped feature, organised by category. Use this as a checklist when comparing OmniLLM against another HRI framework, or when answering "what does this project actually do?"*
+
+### K.4.1 — Core LLM Features
+
+- Unified `LLMGateway.query(model_id, messages)` across **19 registered models** from 6+ providers (OpenAI, Anthropic, Google, DeepSeek, Ollama, openai-compatible)
+- `LLMGateway.query_multiple(model_ids, messages)` — parallel queries via `asyncio.gather`
+- Per-call cost calculation in USD from the `config/models.yaml` registry
+- Latency measurement with `time.perf_counter()` high-resolution timer
+- Graceful per-call error handling — errors return as `ModelResponse(error=...)` rather than raising
+- `litellm.drop_params = True` — automatically strips unsupported parameters (e.g. `temperature` for o-series models)
+- Provider prefix routing (`ollama/`, `gemini/`, `anthropic/`, `openai/`)
+
+### K.4.2 — Smart Routing Features
+
+- Six routing strategies: `BEST_QUALITY`, `LOWEST_COST`, `LOWEST_LATENCY`, `BEST_VALUE`, `LOCAL_PREFERRED`, `TASK_TYPE`
+- Composite `BEST_VALUE` score (quality 50% + cost 30% + latency 20%)
+- Hard constraints: `budget_usd`, `max_latency_ms`
+- Fallback model list in `config/models.yaml` (`routing.fallback_models`)
+- Per-HRI-task routing via `routing.hri_task_routing` block
+- Static default scores in `SmartRouter._DEFAULT_SCORES` for the cold-start case
+- Self-updating quality table from past `omnillm evaluate` results
+- `route_by_complexity()` — short prompts → cheap model; long → quality model
+
+### K.4.3 — Consensus / Council Features
+
+- Three synthesis strategies: `majority_vote`, `weighted`, `synthesis` (default)
+- Default 3-model council (configurable)
+- Position-bias mitigation via response shuffling on synthesis
+- Graceful per-model degradation (council continues if one model fails)
+- Cost-aware: configurable per-call budget cap
+
+### K.4.4 — Evaluation Features (LLM-as-Judge)
+
+- **Referenceless (G-Eval)** — score open-ended responses
+- **Reference-Based** — score against a known gold answer
+- **Pairwise** — winner: A / B / tie, with position-bias swap-and-aggregate
+- 8 evaluation axes (Reasoning, Knowledge, Code, Instruction-Following, Safety, Robot-Readiness, Latency, Cost-Efficiency)
+- Configurable judge model (default GPT-4o-mini)
+- Used internally by RAG pipeline for faithfulness scoring
+
+### K.4.5 — ELO Scoring Features
+
+- Standard ELO maths (K=32 below 2000, K=16 above)
+- Per-category leaderboards: `overall`, `reasoning`, `embodied_hri`, plus the four HRI task types
+- `update_pairwise(model_a, model_b, winner, category=...)`
+- `leaderboard(category=...)` returns sorted ratings
+- Persistent JSON file across runs
+- Initial rating 1000 per category
+
+### K.4.6 — RAG Features
+
+- ChromaDB-backed semantic retrieval (HNSW cosine)
+- Keyword-search fallback when ChromaDB unavailable
+- Document loaders for `.txt`, `.csv`, `.pdf` (via pypdf)
+- Recursive character text splitter (chunk_size 512, overlap 64)
+- Configurable `top_k` (default 4)
+- LLM-as-Judge faithfulness scoring (0–1)
+- Lightweight hallucination heuristic (answer-word coverage)
+- Per-call `model_id=` override (May 2026 addition)
+- Persistent SQLite-backed ChromaDB store
+
+### K.4.7 — HRI Features
+
+- Rule-based task classifier (T1–T4) with optional LLM fallback
+- 3-tier language detector: Unicode script, n-gram, langdetect
+- `LanguageDetector.recommended_model` per detected language
+- 5 experimental conditions (A–E) with declarative `CONDITION_CONFIGS`
+- `ParticipantSession` dataclass with UUID session IDs
+- `ExperimentManager` for Latin-square assignment (optional)
+- Per-condition model resolution at `/interact` endpoint (May 2026 fix)
+- Multilingual retry-with-backup-model in T4 node
+
+### K.4.8 — LangGraph Agent Pipeline Features
+
+- 9 nodes, all async
+- `_merge_state` wrapper preserves prior fields through every node
+- Conditional edge based on `(task_type, condition, rag_enabled)`
+- Fully visualisable as Mermaid / Graphviz
+- Lazy LangGraph import (server still runs without it via fallback)
+- End-to-end latency measurement via `_start_time` field
+
+### K.4.9 — Robot Bridge Features
+
+- Abstract `RobotBridge` ABC with 6 async methods
+- Pepper concrete implementation with 3-mode auto-detection (`server` / `direct` / `stub`)
+- aiohttp async HTTP client
+- Choregraphe virtual-robot port auto-discovery
+- Three trigger modes (`text`, `touch`, `vad`) in `naoqi_client.py`
+- Face tracking via `ALTracker` (`--track-face`)
+- Two topologies (Pepper-polls and AI-server-drives)
+
+### K.4.10 — Robotics Helper Features
+
+- `GesturePlanner` — rule-based (task_type + response_text) → (gesture, LED)
+- Direction-pattern regex matching for navigation gestures
+- Content-triggered gesture overrides (hello → wave, goodbye → wave_goodbye)
+- 7-colour eye-LED palette tied to interaction mode
+- Local `WhisperSTT` (privacy-preserving, free, ~700ms on CPU)
+- `parse_llm_to_action()` — LLM JSON → `RobotAction`
+- `parse_nav2_goal()` — for future ROS2 integration
+
+### K.4.11 — Server Features
+
+- Flask AI server with 6 HTTP endpoints (`/interact`, `/transcribe`, `/evaluate`, `/health`, `/status`, `/export`)
+- Stdlib-only NAOqi bridge server (Python 2.7-compatible)
+- Three trigger modes in NAOqi client
+- Automatic fallback to direct gateway if LangGraph unavailable
+- CORS-off by default (same-LAN only)
+- Environment-variable-based config (`OMNILLM_DEFAULT_MODEL`, `OMNILLM_KNOWLEDGE_BASE`)
+
+### K.4.12 — Logging / Reporting Features
+
+- `ExperimentLogger` with append-only JSON-Lines persistence
+- `InteractionRecord` dataclass — 20 fields per interaction
+- `QuestionnaireCollector` — Likert + Godspeed + Pairwise + Observer
+- `CostTracker` — per-model running USD spend
+- `export.py` — JSON ↔ CSV ↔ Markdown converter
+- `summary_by_condition()` for the per-condition Likert means table
+- `pairwise_win_rates()` for the ELO updates
+
+### K.4.13 — CLI Features
+
+- `omnillm models` (filterable by cloud/local)
+- `omnillm ask` — one or many models or `--all`
+- `omnillm route` — six strategies with optional budget/latency constraints
+- `omnillm council` — three synthesis strategies
+- `omnillm compare` — pairwise with position-bias swap
+- `omnillm evaluate` — full 8-axis benchmark sweep
+- `omnillm leaderboard` — per-category ELO leaderboard
+- `omnillm costs` — per-model spend
+- `omnillm export` — CSV / Markdown / JSON
+
+### K.4.14 — Test Suite Features
+
+- 289 tests covering every public function
+- All LLM calls mocked — no API keys or real network required
+- pytest-asyncio for async test functions
+- pytest-mock for the `mocker` fixture
+- ~5 second total run-time
+- CI-friendly (Linux, macOS, Windows)
+
+### K.4.15 — Documentation Features
+
+- This 250-page book (rebuildable from Markdown via pure-Python pipeline)
+- DejaVu-based PDF with Unicode glyph coverage
+- 18 chapters + 11 appendices
+- Three-reader structure (Owner / Beginner / Academic) consistent across every chapter
+
+\newpage
+
+## K.5 — One-Month Execution Plan (Distinct From the 13-Week Build Plan)
+
+> *Chapter 22 gave a **13-week build plan** for someone replicating OmniLLM from a blank repo. This section gives a **one-month execution plan** for someone whose OmniLLM is already built and who wants to run the experimental study at the lab.*
+
+### K.5.1 — Week 1 — Final Infrastructure Setup (Days 1–7)
+
+**Day 1–2 — Pepper ↔ AI Server Bridge verification.** Confirm `/health` returns OK against the real Pepper at DIBRIS. Run the Day-Zero checklist (Chapter 21) end-to-end with the author as P000. Catch any infra bugs at this stage rather than mid-study.
+
+**Day 3–4 — OmniLLM + LiteLLM full sweep.** Confirm `omnillm models` lists all 19 models, that each model with an API key returns a non-error `omnillm ask` response, that Ollama returns from `llama3-8b-local`. Test the smart router (`omnillm route --strategy TASK_TYPE`) and LLM-as-Judge (`omnillm evaluate`).
+
+**Day 5–6 — RAG Pipeline verification.** Open the DIBRIS knowledge base files (`lab_info.txt`, `faq.txt`, `university_map.txt`) and verify they reflect current lab state. Update any outdated facts. Re-index. Test retrieval with `curl -X POST .../interact -d '{"text":"What time does the lab open?","condition":"A"}'`.
+
+**Day 7 — End-to-end pilot pass.** Run the full 20-interaction matrix on the real Pepper with yourself as P000. Verify every condition routes to the expected model. Check latencies fall in the expected range (A: ~1.4s, B: ~2.8s, D: ~3.1s).
+
+### K.5.2 — Week 2 — Protocol Refinement and Participant Prep (Days 8–14)
+
+**Day 8–9 — Gesture / Speech Refinement.** Watch the pilot recording (if available). Are gestures crisp? Is Pepper's speaking rate too fast? Tune `ALAnimatedSpeech` parameters. Confirm the 7-colour LED palette communicates the intended mode.
+
+**Day 10–11 — Final Questionnaire and Protocol.** Print 20 sets of paper questionnaires (5 conditions per participant × 15 participants + spares). Finalise the experimenter script (the briefing speech). Print Latin-square assignment sheets for each participant slot.
+
+**Day 12–13 — Pre-Study Pilots With Lab Colleagues.** Run 2–3 pilots with friendly volunteers from the lab. Note: do not include these in the final N. Identify and fix any latency issues, Whisper misfires, gesture-sync problems, or protocol clarification needs.
+
+**Day 14 — Ethics & GDPR Paperwork.** Confirm Comitato Etico approval is in hand (if required). Have consent forms printed. Set up the participant-recruitment email and book the lab schedule.
+
+### K.5.3 — Week 3 — Run Experiments (Days 15–21)
+
+**Day 15–21 — Participant Sessions.** Aim for **2–3 participants per day**. Each session ≈ 40–60 minutes including briefing, the 20 interactions, paper questionnaires, pairwise preference, debrief, and turnover. Target: **15 participants** by end of week.
+
+| Day | Participants |
+|---|---|
+| Day 15 (Mon) | P001, P002 |
+| Day 16 (Tue) | P003, P004 |
+| Day 17 (Wed) | P005, P006, P007 |
+| Day 18 (Thu) | P008, P009 |
+| Day 19 (Fri) | P010, P011 |
+| Day 20 (Mon) | P012, P013 |
+| Day 21 (Tue) | P014, P015 |
+
+Reserve days 22–24 as buffer for reschedules / drop-outs.
+
+**Daily routine:**
+
+1. Pre-session: Pepper power-on, server-up, ping check.
+2. Per-session: briefing → driver → questionnaires → pairwise → debrief.
+3. Post-session: backup `results/by_participant/Pxxx/` immediately.
+4. End-of-day: `Copy-Item -Recurse results\ D:\thesis-backup\results-<date>\`.
+
+### K.5.4 — Week 4 — Analysis and Writing (Days 22–30)
+
+**Day 22–24 — Data Analysis.** Open `notebooks/analysis.ipynb`. Load all 15 participants' CSVs into pandas. Compute per-condition Likert means with 95% CIs. Run the repeated-measures ANOVA. Compute pairwise win-rates. Build the embodied ELO leaderboard.
+
+**Day 25–28 — Write.** The thesis structure:
+
+- Introduction & Related Work (use Appendix G citations)
+- System Architecture (figures from Appendix E + Part II)
+- Experimental Design (Part V chapters 23–25)
+- Results (your tables from Day 22–24)
+- Discussion (refer to Part VI for future scope; compare against literature in Appendix H)
+- Conclusion
+
+**Day 29–30 — Polish and Submit.** Generate the final figures. Cross-check every citation. Run a final spell-check. Submit to your supervisor for review. Address feedback within 2–3 days.
+
+### K.5.5 — Common Failure Modes During the Study Month
+
+| Failure | Mitigation |
+|---|---|
+| Participant cancels last-minute | Have a backlog of 3–5 alternates on stand-by. Recruit through the department mailing list as a rolling pool. |
+| Pepper drops connection mid-session | The driver logs and continues; if it recurs, restart bridge + driver in <60s. If it happens twice in one session, abort and reschedule. |
+| OpenAI/Anthropic outage | Most outages are <30 minutes. Schedule sessions later that day. If sustained, run Conditions B + locally-routed C only. |
+| Whisper transcription fails for a participant with a strong accent | Bump `model_size` to `"small"` in `whisper_stt.py` for that participant only. |
+| Ethics committee comes back with revision requests | Build in 2-week buffer before Day 15. Approval-related delays are the #1 cause of missed thesis deadlines. |
+| Your laptop battery dies mid-session | Always plug in. Have a spare charger in the bag. |
+
+### K.5.6 — When to Stop
+
+You will be tempted to add features forever. The thesis writes itself when you can answer **three** questions with data:
+
+- Does smart routing beat fixed (H2)?
+- Does RAG help (H3)?
+- Does embodiment change the ranking (H1)?
+
+Everything else is decoration. Add it after submission.
 
 \newpage
 
