@@ -25,6 +25,15 @@ import litellm
 import yaml
 
 litellm.drop_params = True
+# Suppress LiteLLM's background LoggingWorker — the Flask server runs each
+# request in a short-lived event loop, so the worker task is orphaned at
+# loop close, producing noisy "Task was destroyed but it is pending" errors.
+# We don't use LiteLLM callbacks anyway; OmniLLM logs via ExperimentLogger.
+litellm.callbacks = []
+litellm.success_callback = []
+litellm.failure_callback = []
+litellm._async_success_callback = []
+litellm._async_failure_callback = []
 
 
 @dataclass

@@ -315,58 +315,28 @@ class PepperBridge(RobotBridge):
 # Choregraphe virtual-Pepper port discovery
 # ─────────────────────────────────────────────────────────────────────────────
 
-CHOREGRAPHE_DEFAULT_PORT_HINTS: tuple[int, ...] = (
-    # Common ports the Choregraphe virtual robot has ended up on across
-    # launches.  Used as fast-path hints before scanning.  The first one is
-    # what Akshita's machine landed on most recently.
-    49959, 49960, 49961, 60930, 62494, 9559,
-)
+#: Canonical Choregraphe virtual-robot port. Lock this in Choregraphe via
+#: Edit -> Preferences -> Virtual Robot -> "Use fixed port" = 62763.
+CHOREGRAPHE_DEFAULT_PORT: int = 62763
+
+#: Probe order: locked Choregraphe port first, then real-Pepper default.
+CHOREGRAPHE_DEFAULT_PORT_HINTS: tuple[int, ...] = (CHOREGRAPHE_DEFAULT_PORT, 9559)
 
 
 async def discover_choregraphe_port(
     host: str = "127.0.0.1",
     hints: tuple[int, ...] = CHOREGRAPHE_DEFAULT_PORT_HINTS,
-    scan_range: tuple[int, int] | None = (49152, 65535),
-    max_scan: int = 256,
-    timeout: float = 0.05,
+    timeout: float = 0.1,
 ) -> int | None:
-    """Best-effort discovery of Choregraphe's randomised virtual-robot port.
+    """Probe a small set of hint ports and return the first reachable one.
 
-    Strategy:
-
-    1. Try a small list of *hint* ports (recent observed values + 9559).
-    2. If none work, scan a slice of the ephemeral range looking for a
-       socket that accepts a connection.  We bound the scan to
-       ``max_scan`` ports so we don't pay 16k connect-syscalls.
-
-    This is a TCP-reachability check only -- it does NOT validate that the
-    peer speaks NAOqi.  Callers should follow up with an actual connection.
-
-    Args:
-        host: Always ``127.0.0.1`` for Choregraphe.
-        hints: Ports to probe first (fast path).
-        scan_range: Optional ``(lo, hi)`` range to scan if hints miss.
-            Pass ``None`` to disable scanning.
-        max_scan: Cap on how many ports we scan inside ``scan_range``.
-        timeout: Per-port TCP timeout (seconds).
-
-    Returns:
-        The first port that accepts a TCP connection, or ``None`` if none
-        of the candidates respond.
+    Choregraphe's virtual-robot port should be locked to 62763 (see Choregraphe
+    -> Edit -> Preferences -> Virtual Robot -> "Use fixed port"). When that
+    locking step has been done, this function returns 62763 on the first probe.
     """
     for port in hints:
         if _tcp_reachable(host, port, timeout=timeout):
             return port
-
-    if scan_range is None:
-        return None
-
-    lo, hi = scan_range
-    step = max(1, (hi - lo) // max_scan)
-    for port in range(lo, hi, step):
-        if _tcp_reachable(host, port, timeout=timeout):
-            return port
-
     return None
 
 
@@ -411,10 +381,14 @@ async def make_pepper_bridge(
     if robot_port is None:
         if robot_ip in ("127.0.0.1", "localhost"):
             discovered = await discover_choregraphe_port(robot_ip)
-            robot_port = discovered or 9559
+            robot_port = discovered or CHOREGRAPHE_DEFAULT_PORT
             if discovered is None:
                 logger.warning(
-                    "Could not auto-discover Choregraphe port; using 9559.")
+                    "Choregraphe not reachable on %d or 9559. Lock it via "
+                    "Choregraphe -> Edit -> Preferences -> Virtual Robot -> "
+                    "'Use fixed port' = %d, then relaunch the virtual robot.",
+                    CHOREGRAPHE_DEFAULT_PORT, CHOREGRAPHE_DEFAULT_PORT,
+                )
         else:
             robot_port = 9559
 
@@ -433,5 +407,6 @@ __all__ = [
     "PepperBridge",
     "discover_choregraphe_port",
     "make_pepper_bridge",
+    "CHOREGRAPHE_DEFAULT_PORT",
     "CHOREGRAPHE_DEFAULT_PORT_HINTS",
 ]

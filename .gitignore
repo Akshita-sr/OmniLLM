@@ -27,11 +27,14 @@ env/
 .env.local
 .env.*.local
 
-# Results and outputs (keep .gitkeep)
-results/*.json
-results/*.csv
-results/*.md
-!results/.gitkeep
+# Generated experiment results (regenerate via the /export endpoint)
+results/
+
+# ChromaDB persistence (regenerate with: python -m omnillm.rag.builder --rebuild)
+.chroma_store/
+
+# Live-fetched KB stubs (regenerate with the builder; commit only the verified .md files)
+knowledge_base/*_fetched.md
 
 # ELO scores
 *.elo.json
@@ -65,13 +68,16 @@ htmlcov/
 *.log
 logs/
 
-# Generated book outputs (rebuild with python book/build_pdf.py)
+# Generated book outputs
 book/OmniLLM_Book.pdf
 book/OmniLLM_Book.html
+book2/OmniLLM_Book.pdf
+book2/OmniLLM_Book.html
+book_legacy.zip
 
-# Transient batch-run transcripts (structured data lives in results/)
-scripts/pepper_demo/test_results.txt
-scripts/pepper_demo/*.log
+# Audio temp files
+*.wav.tmp
+recording_*.wav
 
 # Type checking
 .mypy_cache/
@@ -83,4 +89,3 @@ scripts/pepper_demo/*.log
 
 # Distribution
 MANIFEST
-omnillm.egg-info/

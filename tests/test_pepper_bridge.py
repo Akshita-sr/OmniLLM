@@ -123,14 +123,10 @@ class TestChoregrapheDiscovery:
     def test_discover_returns_none_when_nothing_listening(self):
         from omnillm.robotics.pepper import discover_choregraphe_port
 
-        # Pick a host port that is definitely closed and pass it as a hint,
-        # plus a narrow scan range that's unlikely to find anything.
         async def go():
             return await discover_choregraphe_port(
                 host="127.0.0.1",
                 hints=(_free_port(),),         # always closed
-                scan_range=(0, 1),             # impossible range
-                max_scan=1,
                 timeout=0.05,
             )
 
@@ -139,7 +135,6 @@ class TestChoregrapheDiscovery:
     def test_discover_finds_an_open_port(self):
         from omnillm.robotics.pepper import discover_choregraphe_port
 
-        # Open a real listener so discovery has something to find.
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.bind(("127.0.0.1", 0))
         sock.listen(1)
@@ -150,13 +145,16 @@ class TestChoregrapheDiscovery:
                 return await discover_choregraphe_port(
                     host="127.0.0.1",
                     hints=(port,),
-                    scan_range=None,
                     timeout=0.2,
                 )
 
             assert asyncio.run(go()) == port
         finally:
             sock.close()
+
+    def test_default_port_is_62763(self):
+        from omnillm.robotics.pepper import CHOREGRAPHE_DEFAULT_PORT
+        assert CHOREGRAPHE_DEFAULT_PORT == 62763
 
 
 # ── make_pepper_bridge factory ────────────────────────────────────────────────

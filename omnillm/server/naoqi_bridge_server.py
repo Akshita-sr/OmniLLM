@@ -35,7 +35,7 @@ Usage
 On Pepper (or any machine with pynaoqi 2.5)::
 
     C:\\Python27\\python.exe -m omnillm.server.naoqi_bridge_server \\
-        --robot-ip 127.0.0.1 --robot-port 49959 --bridge-port 6000
+        --robot-ip 127.0.0.1 --robot-port 62763 --bridge-port 6000
 
 For real Pepper at the lab::
 
@@ -668,8 +668,9 @@ def main():
         description="OmniLLM NAOqi Bridge Server (Python 2.7 + NAOqi 2.5)")
     parser.add_argument("--robot-ip", default="127.0.0.1",
                         help="Pepper IP (default: 127.0.0.1 for virtual)")
-    parser.add_argument("--robot-port", type=int, default=9559,
-                        help="NAOqi port (default: 9559 real; virtual is random)")
+    parser.add_argument("--robot-port", type=int, default=62763,
+                        help="NAOqi port (default: 62763 = Choregraphe locked port; "
+                             "use 9559 for real Pepper)")
     parser.add_argument("--bridge-port", type=int, default=6000,
                         help="Port for THIS HTTP bridge (default: 6000)")
     parser.add_argument("--bind", default="127.0.0.1",

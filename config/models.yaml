@@ -206,14 +206,6 @@ routing:
     navigation: claude-haiku             # low-latency reply for live spatial guidance + multilingual fallback
     social_conversation: claude-haiku    # natural, empathetic
     multilingual: claude-haiku           # Haiku has strong multilingual coverage and no Google free-tier quota risk
-  # Experimental conditions for Embodied LLM Arena
-  hri_conditions:
-    A: openai-gpt4o-mini   # Fixed cloud baseline
-    B: llama3-8b-local      # Fixed local baseline
-    C: smart_routed         # OmniLLM selects per task
-    D: consensus            # 3-model council synthesis
-    E: no_rag               # RAG-off control (same as A)
-
 # ─── Consensus / LLM Council Configuration ─────────────────────────────────
 consensus:
   default_council:

@@ -200,7 +200,7 @@ class RAGPipeline:
         return len(chunks)
 
     def index_file(self, path: str | Path) -> int:
-        """Index a single file (TXT, CSV, or PDF) into the knowledge base.
+        """Index a single file (TXT, MD, CSV, or PDF) into the knowledge base.
 
         PDF support requires ``pypdf``.  CSV files are indexed row by row.
 
@@ -213,7 +213,7 @@ class RAGPipeline:
         path = Path(path)
         suffix = path.suffix.lower()
 
-        if suffix == ".txt":
+        if suffix in (".txt", ".md"):
             text = path.read_text(encoding="utf-8")
             return self.index_text(text, source=path.name)
 
@@ -241,7 +241,7 @@ class RAGPipeline:
         """
         directory = Path(directory)
         total = 0
-        for pattern in ("**/*.txt", "**/*.csv", "**/*.pdf"):
+        for pattern in ("**/*.txt", "**/*.md", "**/*.csv", "**/*.pdf"):
             for filepath in directory.glob(pattern):
                 total += self.index_file(filepath)
         return total
