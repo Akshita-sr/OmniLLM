@@ -26,6 +26,26 @@ Usage::
     print(response.answer)
     print(f"Faithfulness: {response.faithfulness_score:.2f}")
     print(f"Sources: {[c['source'] for c in response.retrieved_chunks]}")
+
+──────────────────────────────────────────────────────────────────────
+BEGINNER ORIENTATION
+──────────────────────────────────────────────────────────────────────
+RAG = Retrieval-Augmented Generation. The trick is:
+  1. Look up relevant facts FIRST (retrieval)
+  2. Then ask the LLM to answer using ONLY those facts (augmented generation)
+This prevents the LLM from making things up (hallucinating) on lab-specific
+questions where it has no training data.
+
+The three-step lifecycle:
+  - INDEXING (once, or when KB changes): split docs into chunks, embed each
+    chunk into a vector, store in ChromaDB.
+  - RETRIEVAL (per query): embed the question, find the top-k closest
+    chunks by cosine similarity.
+  - GENERATION (per query): give the LLM the chunks + question, with the
+    system prompt "answer ONLY from context".
+
+See OMNILLM_MASTER_BOOK.md §2.8 ("Deep Dive: RAG") and §3.3 ("Vector DB").
+──────────────────────────────────────────────────────────────────────
 """
 
 from __future__ import annotations
@@ -84,6 +104,9 @@ class RAGResponse:
     latency_ms: float = 0.0
 
 
+# ──────────────────────────────────────────────────────────────────────
+# THE PIPELINE CLASS.
+# ──────────────────────────────────────────────────────────────────────
 class RAGPipeline:
     """Retrieval-Augmented Generation pipeline for OmniLLM.
 
@@ -133,7 +156,13 @@ class RAGPipeline:
         self.model_id = model_id
         self.collection_name = collection_name
         self.persist_directory = Path(persist_directory) if persist_directory else None
+        # top_k = how many chunks to retrieve per query. 4 is a sweet spot
+        # — enough context for accuracy, small enough to stay under cheap
+        # models' context windows and keep latency low.
         self.top_k = top_k
+        # chunk_size = how many characters per chunk. 512 ≈ 80-100 words
+        # ≈ one paragraph. Overlap of 64 ensures sentences that span chunk
+        # boundaries aren't split mid-thought.
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
         self.judge_model = judge_model or model_id
@@ -143,6 +172,8 @@ class RAGPipeline:
         self._chroma_client: Any | None = None
         self._collection: Any | None = None
 
+        # Try to fire up ChromaDB; if the user didn't install it, we silently
+        # fall back to in-memory keyword search (much worse, but works).
         self._try_init_chromadb()
 
     # ── ChromaDB initialisation ───────────────────────────────────────────────
@@ -152,6 +183,8 @@ class RAGPipeline:
         try:
             import chromadb  # type: ignore[import-untyped]
 
+            # Persistent client stores vectors on disk; in-memory client
+            # is fine for tests but loses data on restart.
             if self.persist_directory:
                 self.persist_directory.mkdir(parents=True, exist_ok=True)
                 self._chroma_client = chromadb.PersistentClient(
@@ -160,6 +193,9 @@ class RAGPipeline:
             else:
                 self._chroma_client = chromadb.Client()
 
+            # "hnsw:space": "cosine" tells ChromaDB to use COSINE SIMILARITY
+            # for distance (vs euclidean or dot-product). Cosine is standard
+            # for sentence embeddings — see Master Book §3.3.
             self._collection = self._chroma_client.get_or_create_collection(
                 name=self.collection_name,
                 metadata={"hnsw:space": "cosine"},
@@ -172,6 +208,9 @@ class RAGPipeline:
         """Whether the ChromaDB vector store is active."""
         return self._collection is not None
 
+    # ──────────────────────────────────────────────────────────────────
+    # INDEXING METHODS — call these ONCE (or when the KB changes).
+    # ──────────────────────────────────────────────────────────────────
     # ── Document indexing ─────────────────────────────────────────────────────
 
     def index_text(
@@ -213,6 +252,7 @@ class RAGPipeline:
         path = Path(path)
         suffix = path.suffix.lower()
 
+        # Dispatch on file extension. Each branch loads the file appropriately.
         if suffix in (".txt", ".md"):
             text = path.read_text(encoding="utf-8")
             return self.index_text(text, source=path.name)
@@ -241,11 +281,15 @@ class RAGPipeline:
         """
         directory = Path(directory)
         total = 0
+        # ``glob("**/*.ext")`` walks the whole tree recursively.
         for pattern in ("**/*.txt", "**/*.md", "**/*.csv", "**/*.pdf"):
             for filepath in directory.glob(pattern):
                 total += self.index_file(filepath)
         return total
 
+    # ──────────────────────────────────────────────────────────────────
+    # RETRIEVAL + GENERATION — call this per user query.
+    # ──────────────────────────────────────────────────────────────────
     # ── Retrieval and generation ──────────────────────────────────────────────
 
     async def query(
@@ -275,14 +319,19 @@ class RAGPipeline:
 
         start = time.perf_counter()
 
+        # STEP 1 — RETRIEVE relevant chunks for this query.
         retrieved = self.retrieve(question)
         context = self._format_context(retrieved)
 
+        # STEP 2 — Build the system prompt. The default is the "answer ONLY
+        # from context" prompt that prevents hallucination. Callers can
+        # override for special use cases (e.g., council mode).
         system = system_prompt or (
             "You are a helpful assistant. Answer the user's question using ONLY "
             "the provided context. If the answer is not in the context, say so clearly."
         )
 
+        # STEP 3 — Stuff the retrieved context into the user message.
         if context:
             user_content = (
                 f"Context:\n{context}\n\nQuestion: {question}"
@@ -295,6 +344,8 @@ class RAGPipeline:
             {"role": "user", "content": user_content},
         ]
 
+        # STEP 4 — Generate with the LLM. ``model_id`` override lets a single
+        # RAG pipeline instance serve multiple experimental conditions.
         effective_model = model_id or self.model_id
         llm_response = await self.gateway.query(effective_model, messages)
         latency_ms = (time.perf_counter() - start) * 1000
@@ -307,6 +358,9 @@ class RAGPipeline:
             latency_ms=latency_ms,
         )
 
+        # STEP 5 — OPTIONAL: faithfulness scoring (extra LLM call, opt-in).
+        # Only runs if explicitly requested. Used during evaluation runs,
+        # not in the live HRI pipeline (where latency matters more).
         if score_faithfulness and retrieved and not llm_response.is_error:
             rag_response.faithfulness_score = await self._score_faithfulness(
                 question, llm_response.content, retrieved
@@ -334,6 +388,9 @@ class RAGPipeline:
             return self._retrieve_chromadb(query)
         return self._retrieve_keyword(query)
 
+    # ──────────────────────────────────────────────────────────────────
+    # FAITHFULNESS SCORING (LLM-as-judge + lightweight heuristic).
+    # ──────────────────────────────────────────────────────────────────
     # ── Faithfulness scoring ──────────────────────────────────────────────────
 
     async def _score_faithfulness(
@@ -356,6 +413,8 @@ class RAGPipeline:
             Faithfulness score in [0, 1].
         """
         context = self._format_context(chunks)
+        # The judge prompt. Temperature is set to 0.0 (deterministic) so the
+        # same answer always gets the same score on re-run.
         prompt = (
             f"You are a factuality judge. Score how faithfully the answer uses ONLY "
             f"information from the given context (0.0 = completely hallucinated, "
@@ -371,6 +430,7 @@ class RAGPipeline:
             return -1.0
         try:
             raw = resp.content.strip()
+            # Strip Markdown code fences if the LLM wrapped its JSON.
             if "```" in raw:
                 raw = raw.split("```")[1]
                 if raw.startswith("json"):
@@ -378,6 +438,7 @@ class RAGPipeline:
             data = json.loads(raw)
             return float(min(max(data.get("score", 0.5), 0.0), 1.0))
         except (json.JSONDecodeError, ValueError, KeyError):
+            # JSON failed → try regex-grabbing a number from anywhere in the response.
             match = re.search(r"\b([01](?:\.\d+)?|\d*\.\d+)\b", resp.content)
             if match:
                 return float(min(max(float(match.group(1)), 0.0), 1.0))
@@ -402,16 +463,24 @@ class RAGPipeline:
         if not chunks:
             return False
 
+        # Concatenate ALL retrieved chunks (lowercased) into one big string.
         all_context = " ".join(c.text.lower() for c in chunks)
+        # Only consider words 5+ chars long. Stopwords like "the" / "is" would
+        # always match and give a misleadingly high coverage.
         # Consider only words longer than 4 characters to avoid stopwords
         answer_words = [w for w in re.findall(r"\b\w{5,}\b", answer.lower())]
         if not answer_words:
             return False
 
+        # Coverage = fraction of significant answer-words that ALSO appear
+        # in the context. Below 20% suggests the LLM made things up.
         found = sum(1 for w in answer_words if w in all_context)
         coverage = found / len(answer_words)
         return coverage < 0.20
 
+    # ──────────────────────────────────────────────────────────────────
+    # PRIVATE HELPERS — chunking, file loaders, retrieval implementations.
+    # ──────────────────────────────────────────────────────────────────
     # ── Private helpers ───────────────────────────────────────────────────────
 
     def _split_text(
@@ -424,6 +493,9 @@ class RAGPipeline:
         chunks: list[DocumentChunk] = []
         start = 0
         idx = 0
+        # Sliding window: each chunk starts (chunk_size - chunk_overlap)
+        # characters after the previous one, so adjacent chunks share
+        # ``chunk_overlap`` characters of context.
         while start < len(text):
             end = min(start + self.chunk_size, len(text))
             chunk_text = text[start:end].strip()
@@ -445,6 +517,9 @@ class RAGPipeline:
         import csv
 
         total = 0
+        # Each row becomes a chunk shaped like "col1: val1 | col2: val2".
+        # This format makes retrieved chunks readable to humans AND parseable
+        # to the LLM in the prompt.
         with path.open(encoding="utf-8", errors="replace") as fh:
             reader = csv.DictReader(fh)
             for i, row in enumerate(reader):
@@ -465,6 +540,7 @@ class RAGPipeline:
 
             total = 0
             reader = pypdf.PdfReader(str(path))
+            # One pass per page; each page's text gets chunked normally.
             for page_num, page in enumerate(reader.pages):
                 text = page.extract_text() or ""
                 if text.strip():
@@ -475,6 +551,7 @@ class RAGPipeline:
                     )
             return total
         except ImportError:
+            # pypdf not installed → degrade to "read as bytes and pray".
             # Fall back: read as binary and decode what we can
             try:
                 text = path.read_bytes().decode("utf-8", errors="replace")
@@ -486,6 +563,9 @@ class RAGPipeline:
         """Upsert chunks into the ChromaDB collection."""
         if not chunks or self._collection is None:
             return
+        # ``upsert`` = insert OR update if the chunk_id already exists.
+        # ChromaDB auto-embeds the ``documents`` strings using its default
+        # embedding model (a sentence-transformers MiniLM by default).
         self._collection.upsert(
             ids=[c.chunk_id for c in chunks],
             documents=[c.text for c in chunks],
@@ -497,6 +577,9 @@ class RAGPipeline:
         if self._collection is None:
             return []
         try:
+            # ChromaDB auto-embeds ``query_texts`` using the same model that
+            # embedded the indexed documents — guarantees the vectors live
+            # in the same space.
             results = self._collection.query(
                 query_texts=[query],
                 n_results=min(self.top_k, self._collection.count()),
@@ -506,6 +589,8 @@ class RAGPipeline:
             metas = results.get("metadatas", [[]])[0]
             dists = results.get("distances", [[]])[0]
             ids = results.get("ids", [[]])[0]
+            # ChromaDB returns distance (lower = closer); we want a similarity
+            # score (higher = better). Subtract from 1.
             for doc, meta, dist, cid in zip(docs, metas, dists, ids):
                 chunks.append(
                     DocumentChunk(
@@ -521,7 +606,11 @@ class RAGPipeline:
             return []
 
     def _retrieve_keyword(self, query: str) -> list[DocumentChunk]:
-        """Keyword overlap retrieval (fallback when ChromaDB is unavailable)."""
+        """Keyword overlap retrieval (fallback when ChromaDB is unavailable).
+
+        Uses Jaccard similarity (intersection / union) on word sets. Much
+        worse than semantic search but works without dependencies.
+        """
         query_words = set(re.findall(r"\b\w{3,}\b", query.lower()))
         if not query_words or not self._documents:
             return []
@@ -531,6 +620,7 @@ class RAGPipeline:
             chunk_words = set(re.findall(r"\b\w{3,}\b", chunk.text.lower()))
             overlap = len(query_words & chunk_words)
             if overlap > 0:
+                # Jaccard: |intersection| / |union|. 1e-9 prevents div-by-zero.
                 score = overlap / (len(query_words | chunk_words) + 1e-9)
                 scored.append((score, chunk))
 
@@ -554,6 +644,7 @@ class RAGPipeline:
         if not chunks:
             return ""
         parts: list[str] = []
+        # Number each chunk and label its source so the LLM can cite back.
         for i, chunk in enumerate(chunks, start=1):
             parts.append(f"[{i}] (Source: {chunk.source})\n{chunk.text}")
         return "\n\n".join(parts)

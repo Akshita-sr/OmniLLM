@@ -21,6 +21,18 @@ Usage::
     task_type, confidence = classifier.classify("Where is the bathroom?")
     print(task_type)   # HRITaskType.NAVIGATION
     print(confidence)  # 0.95
+
+──────────────────────────────────────────────────────────────────────
+BEGINNER ORIENTATION
+──────────────────────────────────────────────────────────────────────
+This file decides "what kind of question did the user ask?" so the
+pipeline knows which model to route to. It is RULE-BASED on purpose
+(zero latency, zero cost, deterministic) — see OMNILLM_MASTER_BOOK.md
+§2.6 ("Deep Dive: Classification") for the design rationale.
+
+Output: a ``ClassificationResult`` dataclass with ``task_type`` (one of
+4 values), a confidence score 0–1, and a one-line reasoning string.
+──────────────────────────────────────────────────────────────────────
 """
 
 from __future__ import annotations
@@ -34,6 +46,12 @@ if TYPE_CHECKING:
     from omnillm.gateway import LLMGateway
 
 
+# ──────────────────────────────────────────────────────────────────────
+# THE FOUR TASK TYPES — exported as an Enum for type safety.
+# beginner: an Enum is a fixed set of named constants. Using it everywhere
+# prevents typos like ``"info_retrival"`` (missing 'e') that a plain string
+# would silently allow.
+# ──────────────────────────────────────────────────────────────────────
 class HRITaskType(str, Enum):
     """The four HRI task types in the Embodied LLM Arena experiment."""
 
@@ -69,8 +87,15 @@ class ClassificationResult:
     method: str = "rule_based"
 
 
+# ──────────────────────────────────────────────────────────────────────
+# KEYWORD LISTS — the heart of the rule-based classifier.
+# ──────────────────────────────────────────────────────────────────────
+# beginner: ``frozenset`` is an immutable set. We use it because (a) set
+# membership is O(1) which is fast, and (b) frozensets can't be modified
+# accidentally — these are constants.
 # ── Keyword lists for rule-based classification ────────────────────────────
 
+# T2 — NAVIGATION. Words that suggest spatial guidance.
 _NAVIGATION_KEYWORDS: frozenset[str] = frozenset(
     [
         "where", "room", "floor", "building", "cafeteria", "toilet", "bathroom",
@@ -81,6 +106,8 @@ _NAVIGATION_KEYWORDS: frozenset[str] = frozenset(
     ]
 )
 
+# Regex patterns for navigation — matches multi-word phrases that a
+# single-word keyword set can't catch. ``\b`` = word boundary.
 _NAVIGATION_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"\broom\s+\d+\b", re.IGNORECASE),
     re.compile(r"\b(floor|level)\s+\d+\b", re.IGNORECASE),
@@ -89,6 +116,7 @@ _NAVIGATION_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"\bhow (to get|do i get) to\b", re.IGNORECASE),
 ]
 
+# T3 — SOCIAL CONVERSATION.
 _SOCIAL_KEYWORDS: frozenset[str] = frozenset(
     [
         "how are you", "tell me", "what do you think", "do you like", "your opinion",
@@ -108,6 +136,7 @@ _SOCIAL_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"\b(are you|do you) (a robot|an AI|intelligent|happy|sad)\b", re.IGNORECASE),
 ]
 
+# T1 — INFO RETRIEVAL (factual questions about the lab / people / facilities).
 _INFO_RETRIEVAL_KEYWORDS: frozenset[str] = frozenset(
     [
         "hours", "open", "close", "schedule", "time", "when", "professor",
@@ -127,6 +156,9 @@ _INFO_RETRIEVAL_PATTERNS: list[re.Pattern[str]] = [
 ]
 
 
+# ──────────────────────────────────────────────────────────────────────
+# THE CLASSIFIER CLASS.
+# ──────────────────────────────────────────────────────────────────────
 class HRITaskClassifier:
     """Classifies user utterances into HRI task types (T1–T4).
 
@@ -161,6 +193,9 @@ class HRITaskClassifier:
         self.classifier_model = classifier_model
         self.language_threshold = language_threshold
 
+    # ──────────────────────────────────────────────────────────────────
+    # THE MAIN ENTRY POINT — call this once per utterance.
+    # ──────────────────────────────────────────────────────────────────
     def classify(
         self,
         utterance: str,
@@ -178,7 +213,10 @@ class HRITaskClassifier:
         Returns:
             :class:`ClassificationResult` with task type and confidence.
         """
-        # T4: Multilingual always takes precedence
+        # T4: Multilingual ALWAYS takes precedence over content classification.
+        # If the user is speaking French, they're asking a "multilingual"
+        # question regardless of whether the content is factual or social.
+        # The multilingual model itself will figure out the rest.
         if detected_language != "en":
             return ClassificationResult(
                 task_type=HRITaskType.MULTILINGUAL,
@@ -189,9 +227,11 @@ class HRITaskClassifier:
             )
 
         text_lower = utterance.lower()
+        # beginner: ``re.findall(r"\b\w+\b", text)`` splits the text into
+        # words by word boundaries. We use a set so membership checks are O(1).
         words = set(re.findall(r"\b\w+\b", text_lower))
 
-        # Score each category
+        # Score each category against the same text.
         nav_score = self._score_category(
             text_lower, words, _NAVIGATION_KEYWORDS, _NAVIGATION_PATTERNS
         )
@@ -208,10 +248,14 @@ class HRITaskClassifier:
             HRITaskType.INFO_RETRIEVAL: info_score,
         }
 
+        # Pick the highest-scoring task type.
         best_type = max(scores, key=lambda t: scores[t])
         best_score = scores[best_type]
 
-        # Default to INFO_RETRIEVAL if no strong signal
+        # Default to INFO_RETRIEVAL if no signal is strong enough. This is
+        # the safest fallback because RAG will gracefully say "I don't know"
+        # for vague inputs, whereas defaulting to SOCIAL might give a wrong
+        # tone for a factual question.
         if best_score < 0.1:
             return ClassificationResult(
                 task_type=HRITaskType.INFO_RETRIEVAL,
@@ -221,6 +265,8 @@ class HRITaskClassifier:
                 method="rule_based",
             )
 
+        # Map raw score [0.1, 1.0] → confidence [0.59, 0.95]. The +0.5 floor
+        # reflects that "we matched something" gives at least 50% confidence.
         # Normalise confidence: 0.1 → 0.5, 0.5+ → 0.95
         confidence = min(0.95, 0.5 + best_score * 0.9)
 
@@ -232,6 +278,10 @@ class HRITaskClassifier:
             method="rule_based",
         )
 
+    # ──────────────────────────────────────────────────────────────────
+    # OPTIONAL: LLM-based classification for ambiguous inputs.
+    # Slower (~300 ms) and costs ~$0.0002 per call. Not used by default.
+    # ──────────────────────────────────────────────────────────────────
     async def classify_with_llm(
         self, utterance: str, detected_language: str = "en"
     ) -> ClassificationResult:
@@ -257,7 +307,7 @@ class HRITaskClassifier:
 
         import json
 
-        # T4: Multilingual takes precedence
+        # T4: Multilingual takes precedence (same rule as rule-based path).
         if detected_language != "en":
             return ClassificationResult(
                 task_type=HRITaskType.MULTILINGUAL,
@@ -267,6 +317,8 @@ class HRITaskClassifier:
                 method="llm",
             )
 
+        # The actual classification prompt. Note the "Respond ONLY with valid
+        # JSON" line — we then parse the response with json.loads().
         prompt = (
             "Classify the following user utterance from a human-robot interaction "
             "into one of four categories:\n\n"
@@ -281,14 +333,19 @@ class HRITaskClassifier:
         )
 
         messages = [{"role": "user", "content": prompt}]
+        # temperature=0.0 makes the LLM deterministic — same input always
+        # produces the same output. Critical for a classifier.
         resp = await self.gateway.query(self.classifier_model, messages, temperature=0.0)
 
         if resp.is_error:
-            # Fall back to rule-based
+            # Network/rate-limit failure → fall back to rule-based. Better
+            # to classify with reduced accuracy than to crash.
             return self.classify(utterance, detected_language)
 
         try:
             raw = resp.content.strip()
+            # Strip Markdown code fences if the LLM added them despite our
+            # "Respond ONLY with JSON" instruction. Models sometimes do this.
             if "```" in raw:
                 raw = raw.split("```")[1]
                 if raw.startswith("json"):
@@ -296,6 +353,7 @@ class HRITaskClassifier:
             data = json.loads(raw)
             task_str = str(data.get("task_type", "info_retrieval"))
             task_type = HRITaskType(task_str)
+            # Clamp confidence to [0, 1] just in case the LLM returned 1.2 or -0.3.
             confidence = float(min(max(data.get("confidence", 0.7), 0.0), 1.0))
             reasoning = str(data.get("reasoning", ""))
             return ClassificationResult(
@@ -306,6 +364,7 @@ class HRITaskClassifier:
                 method="llm",
             )
         except (json.JSONDecodeError, ValueError, KeyError):
+            # Malformed JSON or unknown task_type → fall back to rule-based.
             return self.classify(utterance, detected_language)
 
     # ── Private helpers ───────────────────────────────────────────────────────
@@ -317,7 +376,14 @@ class HRITaskClassifier:
         keywords: frozenset[str],
         patterns: list[re.Pattern[str]],
     ) -> float:
-        """Compute a weighted score for a task category."""
+        """Compute a weighted score for a task category.
+
+        Scoring formula:
+          - Single-word keyword overlap: up to +0.3 (0.1 per hit, capped)
+          - Multi-word keyword phrase hit: +0.15 each
+          - Regex pattern match: +0.25 each
+        Max score is clamped to 1.0.
+        """
         score = 0.0
         # Keyword overlap score
         keyword_hits = len(words & keywords)

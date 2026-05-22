@@ -1,4 +1,4 @@
-"""Language Detector for multi-lingual HRI routing.
+r"""Language Detector for multi-lingual HRI routing.
 
 Detects the language of a text input and maps it to the optimal LLM backend
 for the Embodied LLM Arena T4 (Multilingual) task type.
@@ -16,11 +16,34 @@ Usage::
     print(confidence)  # 0.92
     model = detector.get_optimal_model(lang)
     print(model)       # "gemini-flash"
+
+──────────────────────────────────────────────────────────────────────
+BEGINNER ORIENTATION
+──────────────────────────────────────────────────────────────────────
+This file answers two questions for each user utterance:
+  1. What language is the user speaking?  (ISO 639-1 code like "en", "it")
+  2. Which LLM is best at that language?  (e.g., "fr" → "claude-haiku")
+
+It uses TWO signals in priority order:
+  - Unicode script (Chinese ideographs, Arabic letters, etc.) — fast, infallible
+    for non-Latin scripts.
+  - Word-boundary tokens matched against language-specific function words —
+    needed for the Latin-script languages (English, French, German, Italian)
+    where the script alone can't tell us anything.
+
+The word-boundary trick (re.findall(r"\b\w+\b", ...)) is CRITICAL. Earlier
+versions used substring matching ("la" in text), which falsely routed
+plain English ("the lab is open") to the multilingual path because
+"la" appears inside "lab". See OMNILLM_MASTER_BOOK.md §2 module map.
+──────────────────────────────────────────────────────────────────────
 """
 
 from __future__ import annotations
 
 import re
+# beginner: ``unicodedata`` is a Python stdlib module that knows the Unicode
+# name and category of every character. We use it to ask "is this character
+# Arabic / Chinese / Cyrillic / Latin?".
 import unicodedata
 from dataclasses import dataclass
 
@@ -67,6 +90,15 @@ class LanguageDetectionResult:
         return _LANGUAGE_MODEL_MAP.get(self.language, _LANGUAGE_MODEL_MAP["unknown"])
 
 
+# ──────────────────────────────────────────────────────────────────────
+# THE LANGUAGE → MODEL MAP. Edit here to change multilingual routing.
+# ──────────────────────────────────────────────────────────────────────
+# English stays on openai-gpt4o-mini (cheap and strong on English).
+# Non-English routes to claude-haiku because:
+#   - Anthropic Haiku 4.5 is strong in multilingual settings
+#   - Fast enough for live HRI (~600 ms median)
+#   - Not subject to the Google free-tier quota that previously knocked
+#     gemini-flash offline mid-experiment.
 # Mapping of language code → recommended OmniLLM model for that language.
 # English stays on openai-gpt4o-mini (cheap and strong on English).
 # Non-English routes to claude-haiku — Anthropic's Haiku 4.5 is strong in
@@ -95,6 +127,9 @@ _LANGUAGE_MODEL_MAP: dict[str, str] = {
     "unknown": "claude-haiku",
 }
 
+# Unicode script → likely language (coarse mapping for script-based detection).
+# beginner: this lets us say "if the message is mostly Arabic letters, it's
+# probably Arabic" without needing a full language-detection model.
 # Unicode script → likely language (coarse mapping for script-based detection)
 _SCRIPT_LANGUAGE_MAP: dict[str, tuple[str, float]] = {
     "Arabic": ("ar", 0.90),
@@ -109,6 +144,9 @@ _SCRIPT_LANGUAGE_MAP: dict[str, tuple[str, float]] = {
     "Thai": ("th", 0.95),
 }
 
+# High-frequency function words per language. These are the "stopwords"
+# that appear in almost every sentence in that language. If a sentence
+# contains "le", "la", "vous" → it's almost certainly French.
 # Common non-English high-frequency words for n-gram heuristic
 _LANG_WORD_SIGNALS: dict[str, list[str]] = {
     "fr": ["le", "la", "les", "de", "du", "est", "et", "en", "je", "vous", "nous", "une", "bonjour"],
@@ -137,6 +175,9 @@ _ENGLISH_SIGNALS: frozenset[str] = frozenset(
 )
 
 
+# ──────────────────────────────────────────────────────────────────────
+# THE DETECTOR CLASS.
+# ──────────────────────────────────────────────────────────────────────
 class LanguageDetector:
     """Detect the language of text and recommend the optimal LLM backend.
 
@@ -164,6 +205,9 @@ class LanguageDetector:
             custom_model_map: Optional override for the language → model mapping.
                 Keys are ISO 639-1 codes, values are OmniLLM model IDs.
         """
+        # beginner: ``{**a, **b}`` merges two dicts — values from ``b`` win on
+        # collisions. So a custom map overrides the defaults but inherits any
+        # entry the caller didn't override.
         self._model_map = {**_LANGUAGE_MODEL_MAP, **(custom_model_map or {})}
 
     def detect(self, text: str) -> LanguageDetectionResult:
@@ -175,6 +219,7 @@ class LanguageDetector:
         Returns:
             :class:`LanguageDetectionResult` with language code and confidence.
         """
+        # Edge case: empty input → default to English with low confidence.
         if not text or not text.strip():
             return LanguageDetectionResult(
                 language="en", confidence=0.5, script="Latin", is_english=True
@@ -205,6 +250,7 @@ class LanguageDetector:
         en_hits = len(words & _ENGLISH_SIGNALS)
         best_lang = "en"
         best_score = en_hits
+        # Check each non-English language and pick whichever wins by hit count.
         for lang, signals in _LANG_WORD_SIGNALS.items():
             hits = sum(1 for s in signals if s in words)
             if hits > best_score:
@@ -212,6 +258,7 @@ class LanguageDetector:
                 best_lang = lang
 
         if best_lang == "en":
+            # We saw English stopwords → confident English.
             if en_hits >= 1:
                 confidence = min(0.95, 0.5 + en_hits * 0.05)
                 return LanguageDetectionResult(
@@ -220,10 +267,14 @@ class LanguageDetector:
                     script=script or "Latin",
                     is_english=True,
                 )
+            # No English signals AND no non-English signals dominated.
+            # As a last resort try the langdetect library if installed.
             langdetect_result = self._try_langdetect(text)
             if langdetect_result:
                 return langdetect_result
 
+        # A non-English language won the n-gram race. Confidence rises with
+        # the number of distinctive function-word hits.
         confidence = min(0.90, 0.45 + best_score * 0.1)
         return LanguageDetectionResult(
             language=best_lang,
@@ -253,6 +304,10 @@ class LanguageDetector:
             Tuple of (script_name, language_code, confidence).
         """
         script_counts: dict[str, int] = {}
+        # For every alphabetic character, classify its Unicode script.
+        # ``unicodedata.name(char)`` returns the official Unicode name like
+        # "LATIN SMALL LETTER A" or "ARABIC LETTER ALEF" — we string-match
+        # the key script word out of that.
         for char in text:
             if char.isalpha():
                 try:
@@ -287,21 +342,28 @@ class LanguageDetector:
         if not script_counts:
             return "Latin", "", 0.0
 
+        # Pick the most common script. ``confidence`` is the fraction of
+        # alphabetic chars that belong to that script.
         dominant = max(script_counts, key=lambda s: script_counts[s])
         total = sum(script_counts.values())
         confidence = script_counts[dominant] / total
 
         if dominant == "Latin":
-            # Latin script — can't determine language from script alone
+            # Latin script alone can't determine language (English, French,
+            # German all share it). Return empty so the caller falls through
+            # to the n-gram heuristic.
             return "Latin", "", 0.0
 
         lang, base_conf = _SCRIPT_LANGUAGE_MAP.get(dominant, ("unknown", 0.7))
+        # Combine the script's base confidence with how dominant it was in the text.
         final_conf = min(0.97, base_conf * confidence)
         return dominant, lang, final_conf
 
     @staticmethod
     def _try_langdetect(text: str) -> LanguageDetectionResult | None:
         """Try using the ``langdetect`` library for high-accuracy detection."""
+        # ``langdetect`` is an optional dep — wrap in try/except so it works
+        # whether or not the user installed the [hri] extra.
         try:
             from langdetect import detect_langs  # type: ignore[import-untyped]
 
