@@ -102,6 +102,19 @@ models:
     cost_per_1m_output: 2.19
     type: cloud
     description: "DeepSeek R1 — cloud reasoning model"
+    hri_strengths: ["reasoning", "info_retrieval"]
+
+  groq-llama3-70b:
+    id: groq-llama3-70b
+    provider: openai_compatible
+    model: llama-3.1-70b-versatile
+    api_key_env: GROQ_API_KEY
+    api_base: https://api.groq.com/openai/v1
+    cost_per_1m_input: 0.00
+    cost_per_1m_output: 0.00
+    type: cloud
+    description: "Groq Llama 3.1 70B — free tier, ~500 tok/s, ideal for Pepper low-latency replies"
+    hri_strengths: ["social_conversation", "navigation", "info_retrieval"]
 
   qwen-2.5-72b:
     id: qwen-2.5-72b
@@ -206,6 +219,18 @@ routing:
     navigation: claude-haiku             # low-latency reply for live spatial guidance + multilingual fallback
     social_conversation: claude-haiku    # natural, empathetic
     multilingual: claude-haiku           # Haiku has strong multilingual coverage and no Google free-tier quota risk
+    reasoning: deepseek-r1-cloud         # multi-step / "why" / causal questions — uses DeepSeek R1 reasoning model
+  # Autonomous-triage defaults — consumed by SmartRouter.route_autonomous
+  # Edit these to tune behaviour without code changes.
+  autonomous_defaults:
+    simple_model: groq-llama3-70b               # System-1: free + fast (~500 tok/s)
+    simple_fallback:                            # tried in order when simple_model errors
+      - llama3-8b-local                         # zero-cost offline backstop
+      - openai-gpt4o-mini                       # paid reliable last resort
+    coding_model: openai-gpt4o                  # BEST_QUALITY for code generation
+    reasoning_model: deepseek-r1-cloud          # multi-step / causal reasoning
+    complexity_council_threshold: complex       # trigger council when triage says "complex"
+    safety_council_mandatory: true              # always council when triage.safety != safe
 # ─── Consensus / LLM Council Configuration ─────────────────────────────────
 consensus:
   default_council:

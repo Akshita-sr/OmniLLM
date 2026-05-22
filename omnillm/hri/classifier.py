@@ -67,6 +67,9 @@ class HRITaskType(str, Enum):
     MULTILINGUAL = "multilingual"
     """T4: Non-English utterances (auto-detected, routes to multilingual model)."""
 
+    REASONING = "reasoning"
+    """T5: Multi-step / causal / analytical questions ("why", "how does X work", "step by step")."""
+
 
 @dataclass
 class ClassificationResult:
@@ -155,6 +158,24 @@ _INFO_RETRIEVAL_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"\b(research|project|publication|paper)\b", re.IGNORECASE),
 ]
 
+# T5 — REASONING. Multi-step / causal / analytical questions.
+_REASONING_KEYWORDS: frozenset[str] = frozenset(
+    [
+        "why", "how does", "how do", "step by step", "calculate", "compute",
+        "solve", "prove", "compare", "trade-off", "tradeoff", "reason",
+        "analyse", "analyze", "deduce", "implication", "consequence",
+        "if then", "suppose", "assuming",
+    ]
+)
+
+_REASONING_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(r"\bwhy\s+(does|is|are|do|did|would|should)\b", re.IGNORECASE),
+    re.compile(r"\bhow does\s+\w+\s+work\b", re.IGNORECASE),
+    re.compile(r"\bstep[\s-]by[\s-]step\b", re.IGNORECASE),
+    re.compile(r"\b(calculate|compute|solve)\b", re.IGNORECASE),
+    re.compile(r"\bif\s+.+\s+then\b", re.IGNORECASE),
+]
+
 
 # ──────────────────────────────────────────────────────────────────────
 # THE CLASSIFIER CLASS.
@@ -241,11 +262,15 @@ class HRITaskClassifier:
         info_score = self._score_category(
             text_lower, words, _INFO_RETRIEVAL_KEYWORDS, _INFO_RETRIEVAL_PATTERNS
         )
+        reasoning_score = self._score_category(
+            text_lower, words, _REASONING_KEYWORDS, _REASONING_PATTERNS
+        )
 
         scores: dict[HRITaskType, float] = {
             HRITaskType.NAVIGATION: nav_score,
             HRITaskType.SOCIAL_CONVERSATION: social_score,
             HRITaskType.INFO_RETRIEVAL: info_score,
+            HRITaskType.REASONING: reasoning_score,
         }
 
         # Pick the highest-scoring task type.
@@ -273,7 +298,7 @@ class HRITaskClassifier:
         return ClassificationResult(
             task_type=best_type,
             confidence=round(confidence, 2),
-            reasoning=f"Rule-based scores: nav={nav_score:.2f}, social={social_score:.2f}, info={info_score:.2f}",
+            reasoning=f"Rule-based scores: nav={nav_score:.2f}, social={social_score:.2f}, info={info_score:.2f}, reasoning={reasoning_score:.2f}",
             detected_language=detected_language,
             method="rule_based",
         )
@@ -321,14 +346,15 @@ class HRITaskClassifier:
         # JSON" line — we then parse the response with json.loads().
         prompt = (
             "Classify the following user utterance from a human-robot interaction "
-            "into one of four categories:\n\n"
+            "into one of five categories:\n\n"
             "1. info_retrieval — factual question about the lab, people, schedule, facilities\n"
             "2. navigation — asking for directions, location of a room, spatial guidance\n"
             "3. social_conversation — casual chat, greeting, personal questions, opinions\n"
-            "4. multilingual — utterance in a non-English language\n\n"
+            "4. multilingual — utterance in a non-English language\n"
+            "5. reasoning — multi-step or causal questions (\"why does X happen\", \"explain how X works\", \"step by step\")\n\n"
             f'Utterance: "{utterance}"\n\n'
             'Respond ONLY with valid JSON: {"task_type": "info_retrieval"|"navigation"|'
-            '"social_conversation"|"multilingual", "confidence": <float 0.0-1.0>, '
+            '"social_conversation"|"multilingual"|"reasoning", "confidence": <float 0.0-1.0>, '
             '"reasoning": "<one sentence>"}'
         )
 

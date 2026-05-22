@@ -93,6 +93,15 @@ class InteractionRecord:
     task_success: bool | None = None
     language: str = "en"
     gesture_used: str | None = None
+    # Autonomous triage + strategy fields (added 2026-05-22 with LLM-OS refactor).
+    # Optional with safe defaults so legacy log_interaction() callers keep working.
+    triage_intent: str = ""
+    triage_complexity: str = ""
+    triage_safety: str = ""
+    triage_method: str = ""
+    strategy_used: str = ""
+    strategy_reason: str = ""
+    fallback_attempts: int = 0
     timestamp: str = field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
@@ -159,6 +168,13 @@ class ExperimentLogger:
         task_success: bool | None = None,
         language: str = "en",
         gesture_used: str | None = None,
+        triage_intent: str = "",
+        triage_complexity: str = "",
+        triage_safety: str = "",
+        triage_method: str = "",
+        strategy_used: str = "",
+        strategy_reason: str = "",
+        fallback_attempts: int = 0,
         notes: str = "",
     ) -> InteractionRecord:
         """Log a single HRI interaction.
@@ -206,6 +222,13 @@ class ExperimentLogger:
             task_success=task_success,
             language=language,
             gesture_used=gesture_used,
+            triage_intent=triage_intent,
+            triage_complexity=triage_complexity,
+            triage_safety=triage_safety,
+            triage_method=triage_method,
+            strategy_used=strategy_used,
+            strategy_reason=strategy_reason,
+            fallback_attempts=fallback_attempts,
             notes=notes,
         )
         self._records.append(record)

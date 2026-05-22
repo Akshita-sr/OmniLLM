@@ -34,6 +34,8 @@ from typing import TYPE_CHECKING, Any
 from omnillm.hri.classifier import HRITaskClassifier
 from omnillm.hri.language_detector import LanguageDetector
 from omnillm.robotics.gesture_planner import GesturePlanner
+from omnillm.router import SmartRouter, StrategyDecision
+from omnillm.triage import TriageClassifier, TriageResult
 
 # ``TYPE_CHECKING`` is False at runtime, True only when a type-checker
 # (mypy/pyright) is reading the file. We import the big modules only for
@@ -77,101 +79,177 @@ async def process_interaction(
     *,
     default_model: str = "openai-gpt4o-mini",
     council: bool = False,
+    strategy_override: str = "auto",
     language_hint: str | None = None,
     logger: "ExperimentLogger | None" = None,
     session_id: str = "",
     participant_id: str = "anon",
 ) -> dict[str, Any]:
-    """Run one user utterance through the HRI pipeline.
+    """Run one user utterance through the autonomous HRI pipeline.
+
+    The pipeline is the "LLM-OS kernel":
+
+      detect language → triage (intent / complexity / safety) →
+      autonomous strategy decision (direct | rag | council) →
+      answer (with model fallback) → HRI gesture sub-classification →
+      assemble RobotAction → log interaction
 
     Returns a RobotAction-shaped dict: ``{speech, gesture, emotion_led, metadata}``.
     The dict is JSON-serialisable and ready to send to ``PepperBridge.execute_action``.
 
-    ``language_hint`` (e.g. from Whisper) is trusted over the text-based detector
-    when present — Whisper hears the audio and is more reliable than n-gram
-    matching on short transcripts.
+    Args:
+        utterance: User text (transcribed if mic input).
+        gateway: Shared :class:`~omnillm.gateway.LLMGateway`.
+        rag: Optional :class:`~omnillm.rag.pipeline.RAGPipeline` for KB grounding.
+        default_model: Fallback model if YAML defaults are missing.
+        council: Deprecated alias for ``strategy_override="council"``.
+        strategy_override: ``"auto"`` (default — autonomous triage decides),
+            or one of ``"direct"`` / ``"rag"`` / ``"council"`` to force a
+            specific strategy regardless of triage output.
+        language_hint: ISO 639-1 language code, e.g. from Whisper. When set,
+            trusted over the text-based detector.
+        logger: Optional :class:`~omnillm.utils.experiment_logger.ExperimentLogger`.
+        session_id: Experiment session UUID (for logging).
+        participant_id: Participant label (for logging).
     """
     # ``time.monotonic`` is a clock that never jumps backwards (unlike
     # ``time.time``, which NTP can move). Perfect for measuring elapsed time.
     t0 = time.monotonic()
 
-    # STEP 1 — DETECT LANGUAGE.
-    # If Whisper gave us a hint, trust it (Whisper hears the actual audio
-    # and is more reliable on short transcripts than our n-gram detector).
+    # Backwards compat: the legacy ``council=True`` flag wins over override
+    # only if override is "auto". Explicit override always wins.
+    if strategy_override == "auto" and council:
+        strategy_override = "council"
+
+    # STEP 1 — DETECT LANGUAGE (Whisper hint trusted on short transcripts).
     lang = language_hint or LanguageDetector().detect(utterance).language_code
 
-    # STEP 2 — CLASSIFY THE TASK TYPE.
-    # Returns one of: info_retrieval / navigation / social_conversation / multilingual.
-    # If ``lang != "en"`` the classifier short-circuits to "multilingual".
-    task = HRITaskClassifier().classify(
+    # STEP 2 — TRIAGE (autonomous Layer 1: intent / complexity / safety).
+    # Always runs. Rule pass is ~0 ms; LLM escalation only on ambiguous
+    # English prompts and only when safety is "safe".
+    triage = await TriageClassifier(gateway).triage(utterance, language=lang)
+
+    # STEP 2b — STRATEGY DECISION (autonomous Layer 1.5).
+    # Either honour the explicit override or ask the router.
+    if strategy_override != "auto":
+        decision = _override_decision(strategy_override, gateway, default_model)
+    elif lang != "en":
+        # Multilingual gets its own dedicated path — it's a presentation
+        # concern (language) more than a strategy concern. Keep the
+        # battle-tested multilingual branch.
+        decision = StrategyDecision(
+            strategy="direct",
+            primary_model="",  # handled inside _answer_multilingual
+            fallback_chain=[],
+            reason=f"language={lang} → multilingual path",
+        )
+    else:
+        decision = SmartRouter().route_autonomous(
+            triage, rag_available=rag is not None
+        )
+
+    # STEP 3 — ANSWER (exactly one branch runs).
+    if lang != "en" and strategy_override == "auto":
+        # Multilingual branch (kept for parity with the previous pipeline).
+        text, model_id = await _answer_multilingual(gateway, utterance, lang_code=lang)
+        fallback_count = 0
+    elif decision.strategy == "council":
+        text, model_id = await _answer_council(
+            gateway, utterance, rag,
+            safety_aware=(triage.safety != "safe"),
+        )
+        fallback_count = 0
+    elif decision.strategy == "rag" and rag is not None:
+        text, model_id = await _answer_with_rag(rag, utterance, decision.primary_model)
+        fallback_count = 0
+    else:
+        text, model_id, fallback_count = await _answer_direct_with_fallback(
+            gateway, utterance, decision.fallback_chain or [decision.primary_model or default_model],
+        )
+
+    # STEP 3.5 — HRI SUB-CLASSIFY for gesture + LED (presentation layer).
+    # This is the ONLY remaining job of the legacy HRITaskClassifier — it
+    # tells the GesturePlanner which gesture/LED to use. The strategy
+    # decision was already made above.
+    hri_task = HRITaskClassifier().classify(
         utterance, detected_language=lang
     ).task_type.value
-
-    # STEP 3 — ROUTE TO THE RIGHT ANSWER STRATEGY (exactly one branch runs).
-    if council:
-        # Council mode overrides everything: 3 LLMs answer in parallel,
-        # a judge LLM synthesises the best combined answer.
-        text, model_id = await _answer_council(gateway, utterance, rag)
-    elif task == "multilingual":
-        # Non-English → language-optimal model + "respond in <language>" prompt.
-        text, model_id = await _answer_multilingual(gateway, utterance, lang_code=lang)
-    elif task in ("info_retrieval", "navigation") and rag is not None:
-        # Factual or spatial + RAG available → retrieve KB chunks and answer
-        # ONLY from them. See rag/pipeline.py.
-        text, model_id = await _answer_with_rag(rag, utterance, default_model)
-    else:
-        # Default fallthrough: social chat OR RAG disabled. Ask the routed
-        # model directly with no grounding.
-        text, model_id = await _answer_direct(gateway, utterance, default_model)
-
-    # STEP 4 — PLAN A GESTURE + LED COLOUR.
-    # The gesture planner is rule-based: it looks at the task type and the
-    # response text and returns ``(gesture_name, hex_led_colour)``.
-    gesture, led = GesturePlanner().plan(task, text)
+    gesture, led = GesturePlanner().plan(hri_task, text)
     latency_ms = (time.monotonic() - t0) * 1000
 
-    # STEP 5 — ASSEMBLE THE RobotAction DICT.
-    # This shape is the contract with naoqi_bridge_server.py. Don't add
-    # fields here without also updating the bridge to handle them.
+    # STEP 4 — ASSEMBLE THE RobotAction DICT.
+    rag_used = decision.strategy == "rag" and rag is not None
     action: dict[str, Any] = {
         "speech": text,
         "gesture": gesture,
         "emotion_led": led,
         "metadata": {
-            "task_type": task,
+            "task_type": hri_task,
             "language": lang,
             "model_id": model_id,
             "latency_ms": round(latency_ms, 1),
-            "council": council,
-            # ``rag_used`` is True only when RAG actually fired. Council
-            # has its own context-stuffing logic so we report it separately.
-            "rag_used": task in ("info_retrieval", "navigation") and rag is not None and not council,
+            "council": decision.strategy == "council",
+            "rag_used": rag_used,
+            # Autonomous triage + strategy fields (LLM-OS kernel additions).
+            "triage": {
+                "intent": triage.intent,
+                "complexity": triage.complexity,
+                "safety": triage.safety,
+                "confidence": triage.confidence,
+                "method": triage.method,
+            },
+            "strategy": decision.strategy,
+            "strategy_reason": decision.reason,
+            "fallback_attempts": fallback_count,
         },
     }
 
-    # STEP 6 — LOG THE INTERACTION (best-effort; never breaks the response).
-    # Wrapped in try/except so a logging bug never breaks the user-facing
-    # response. The participant must never see an error because the logger
-    # crashed — that would invalidate the HRI experiment data.
+    # STEP 5 — LOG THE INTERACTION (best-effort; never breaks the response).
     if logger is not None:
         try:
             logger.log_interaction(
                 session_id=session_id,
                 participant_id=participant_id,
                 condition="default",
-                task_type=task,
+                task_type=hri_task,
                 utterance=utterance,
                 response=text,
                 model_id=model_id,
                 latency_ms=latency_ms,
-                rag_enabled=action["metadata"]["rag_used"],
+                rag_enabled=rag_used,
                 language=lang,
                 gesture_used=gesture,
+                triage_intent=triage.intent,
+                triage_complexity=triage.complexity,
+                triage_safety=triage.safety,
+                triage_method=triage.method,
+                strategy_used=decision.strategy,
+                strategy_reason=decision.reason,
+                fallback_attempts=fallback_count,
             )
         except Exception:
             pass  # logging is best-effort, never breaks the response
 
     return action
+
+
+def _override_decision(
+    strategy_override: str, gateway: "LLMGateway", default_model: str
+) -> StrategyDecision:
+    """Build a StrategyDecision from a forced override string.
+
+    Reads the same autonomous_defaults from models.yaml as the router so
+    forced direct/rag still pick a sensible primary model.
+    """
+    defaults = gateway._config.get("routing", {}).get("autonomous_defaults", {})
+    primary = defaults.get("simple_model", default_model)
+    chain = [primary, *[m for m in defaults.get("simple_fallback", []) if m != primary]]
+    return StrategyDecision(
+        strategy=strategy_override,  # type: ignore[arg-type]
+        primary_model=primary if strategy_override != "council" else "",
+        fallback_chain=chain if strategy_override != "council" else [],
+        reason=f"strategy_override='{strategy_override}' (manual)",
+    )
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -183,9 +261,8 @@ async def process_interaction(
 async def _answer_direct(
     gateway: "LLMGateway", utterance: str, model_id: str
 ) -> tuple[str, str]:
-    # DIRECT: ask one LLM, no retrieval, no consensus.
-    # beginner: ``temperature=0.7`` is a creativity knob (0.0 = deterministic,
-    # 1.0 = most creative). 0.7 is the conventional default for chat.
+    # DIRECT (single model, no fallback) — kept for callers that want the
+    # original behaviour. New code should use _answer_direct_with_fallback.
     resp = await gateway.query(
         model_id,
         [
@@ -194,11 +271,35 @@ async def _answer_direct(
         ],
         temperature=0.7,
     )
-    # On API failure, return a graceful apology — the robot still gets to
-    # speak rather than crashing the whole pipeline.
     if resp.is_error:
         return f"Sorry, I couldn't answer ({resp.error}).", model_id
     return resp.content, resp.model_id or model_id
+
+
+async def _answer_direct_with_fallback(
+    gateway: "LLMGateway", utterance: str, model_chain: list[str]
+) -> tuple[str, str, int]:
+    """DIRECT with provider fallback — Karpathy/Sutskever robustness leg.
+
+    Tries each model in the chain in order; first non-error wins. Returns
+    ``(text, model_id, fallback_attempts)`` so the pipeline can record
+    whether fallback fired.
+    """
+    if not model_chain:
+        return "Sorry, no model is available right now.", "(empty)", 0
+
+    resp = await gateway.query_with_fallback(
+        model_chain,
+        [
+            {"role": "system", "content": SYSTEM_PROMPT_BASE},
+            {"role": "user", "content": utterance},
+        ],
+        temperature=0.7,
+    )
+    fallback_count = len(resp.metadata.get("fallback_attempts", []))
+    if resp.is_error:
+        return f"Sorry, I couldn't answer ({resp.error}).", resp.model_id, fallback_count
+    return resp.content, resp.model_id, fallback_count
 
 
 async def _answer_with_rag(
@@ -251,11 +352,18 @@ async def _answer_multilingual(
 
 
 async def _answer_council(
-    gateway: "LLMGateway", utterance: str, rag: "RAGPipeline | None"
+    gateway: "LLMGateway",
+    utterance: str,
+    rag: "RAGPipeline | None",
+    safety_aware: bool = False,
 ) -> tuple[str, str]:
     # COUNCIL: three LLMs answer concurrently, a judge LLM synthesises the
     # best combined response. See omnillm/consensus.py for the engine and
     # OMNILLM_MASTER_BOOK.md §3.4.4 for the synthesis prompt verbatim.
+    #
+    # ``safety_aware=True`` passes a refusal-allowing instruction to the
+    # judge — used when the triage classifier flagged the prompt as
+    # dangerous/medical.
     from omnillm.consensus import ConsensusConfig, ConsensusEngine
 
     # Filter the default council down to models the gateway actually knows
@@ -264,11 +372,12 @@ async def _answer_council(
     if not available:
         available = gateway.list_models()[:3]
 
-    # If RAG is available, pre-fetch chunks ONCE and pass them as context
-    # to all three council members. More efficient than letting each model
-    # call RAG independently, and ensures all three see the same facts.
+    # If RAG is available AND this isn't a safety-flagged prompt, pre-fetch
+    # chunks ONCE and pass them as context to all three council members.
+    # Skip RAG for dangerous prompts — KB facts about lab hours don't help
+    # the judge decide whether to refuse a medical question.
     context = ""
-    if rag is not None:
+    if rag is not None and not safety_aware:
         chunks = rag.retrieve(utterance)
         if chunks:
             context = "\n\n".join(f"[{c.source}]: {c.text}" for c in chunks)
@@ -279,7 +388,8 @@ async def _answer_council(
         {"role": "user", "content": user_msg},
     ]
     engine = ConsensusEngine(gateway, ConsensusConfig(council_models=available))
-    council_resp = await engine.query_council(messages)
+    council_resp = await engine.query_council(messages, safety_aware=safety_aware)
     # The model_id string makes it obvious in the log that this was a
     # council answer (e.g. "council:openai-gpt4o-mini+claude-haiku+gemini-2.5-flash").
-    return council_resp.final_answer, "council:" + "+".join(available)
+    prefix = "council-safe:" if safety_aware else "council:"
+    return council_resp.final_answer, prefix + "+".join(available)

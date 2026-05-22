@@ -251,6 +251,60 @@ class LLMGateway:
                 error=str(exc),
             )
 
+    async def query_with_fallback(
+        self,
+        model_chain: list[str],
+        messages: list[dict[str, str]],
+        temperature: float = 0.7,
+        max_tokens: int = 2048,
+    ) -> ModelResponse:
+        """Try each model in order, return the first successful response.
+
+        Implements the "robustness" leg of the Karpathy/Sutskever design:
+        if the primary model goes down (rate limit, network blip, provider
+        outage), the gateway transparently rolls over to the next entry in
+        the chain. The pipeline never sees the failure.
+
+        Args:
+            model_chain: Ordered list of model IDs. Typically:
+                ``[preferred_cloud, local_fallback, paid_reliable_fallback]``.
+            messages: OpenAI-style message list.
+            temperature: Sampling temperature.
+            max_tokens: Max tokens to generate.
+
+        Returns:
+            The first :class:`ModelResponse` whose ``is_error`` is False.
+            If every model fails, returns the LAST error response with a
+            note in ``error`` listing all attempts.
+        """
+        attempts: list[tuple[str, str]] = []
+        last_response: ModelResponse | None = None
+
+        for model_id in model_chain:
+            resp = await self.query(
+                model_id, messages, temperature=temperature, max_tokens=max_tokens
+            )
+            if not resp.is_error:
+                # Annotate the response so callers can tell that fallback fired.
+                if attempts:
+                    resp.metadata["fallback_attempts"] = attempts
+                return resp
+            attempts.append((model_id, resp.error or "unknown error"))
+            last_response = resp
+
+        # All attempts failed — return the last error, but rewrite the error
+        # field so the caller sees the full chain.
+        if last_response is None:
+            return ModelResponse(
+                model_id="(empty chain)",
+                content="",
+                error="query_with_fallback called with empty model_chain",
+            )
+        last_response.error = (
+            f"All {len(model_chain)} models in fallback chain failed: {attempts}"
+        )
+        return last_response
+
     async def query_multiple(
         self,
         model_ids: list[str],

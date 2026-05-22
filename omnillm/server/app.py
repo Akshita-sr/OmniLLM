@@ -142,7 +142,21 @@ def create_app(
         data: dict = request.get_json(force=True) or {}
         utterance: str = (data.get("text") or "").strip()
         audio_b64: str = data.get("audio", "")
-        council: bool = bool(data.get("council", False))
+        # ``strategy_override`` is the new autonomous-pipeline knob:
+        #   "auto"    — let the triage classifier decide (default)
+        #   "direct"  — force single-model with fallback
+        #   "rag"     — force RAG-grounded answer (requires KB)
+        #   "council" — force multi-LLM consensus + judge
+        # The legacy ``council`` bool is kept as an alias for backwards
+        # compat with old run.py builds.
+        strategy_override: str = (data.get("strategy_override") or "auto").lower()
+        if strategy_override not in {"auto", "direct", "rag", "council"}:
+            return jsonify({
+                "error": f"strategy_override must be one of auto/direct/rag/council, got '{strategy_override}'"
+            }), 400
+        council_alias: bool = bool(data.get("council", False))
+        if council_alias and strategy_override == "auto":
+            strategy_override = "council"
         session_id: str = data.get("session_id", "")
         participant_id: str = data.get("participant_id", "anon")
         stt_backend: str = data.get("stt_backend", "api")
@@ -167,7 +181,7 @@ def create_app(
             gateway=gateway,
             rag=rag,
             default_model=_default_model,
-            council=council,
+            strategy_override=strategy_override,
             language_hint=language_hint,
             logger=exp_logger,
             session_id=session_id,

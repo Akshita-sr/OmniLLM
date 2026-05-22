@@ -101,30 +101,24 @@ async def _execute(bridge, action: dict[str, Any]) -> None:
 # ──────────────────────────────────────────────────────────────────────
 # TEXT MODE — read keyboard input, send to server, execute on Pepper.
 # ──────────────────────────────────────────────────────────────────────
-async def _text_loop(server: str, bridge, council: bool) -> None:
+async def _text_loop(server: str, bridge, strategy_override: str) -> None:
     # Lazy import so the script can show --help without aiohttp installed.
     import aiohttp
-    print("Text mode. Type a prompt and press Enter. Ctrl-C to quit.\n")
+    print(f"Text mode (strategy={strategy_override}). Type a prompt and press Enter. Ctrl-C to quit.\n")
     async with aiohttp.ClientSession() as session:
         while True:
-            # beginner: ``input()`` blocks the event loop, but that's fine
-            # here — in interactive mode we have nothing else to do while
-            # waiting for the user to type.
             try:
                 utterance = input("> ").strip()
             except (EOFError, KeyboardInterrupt):
-                # Clean Ctrl-D / Ctrl-C handling instead of a traceback.
                 print()
                 return
             if not utterance:
                 continue
             if utterance.lower() in {"quit", "exit", "q"}:
                 return
-            payload = {"text": utterance, "council": council}
+            payload = {"text": utterance, "strategy_override": strategy_override}
             action = await _post_interact(session, server, payload)
             if "error" in action:
-                # Server errors come back as {"error": "..."}. Print and
-                # continue — the user might just need to retry.
                 print(f"  [error] {action['error']}")
                 continue
             await _execute(bridge, action)
@@ -133,37 +127,26 @@ async def _text_loop(server: str, bridge, council: bool) -> None:
 # ──────────────────────────────────────────────────────────────────────
 # MIC MODE — record from laptop mic, transcribe + answer + execute.
 # ──────────────────────────────────────────────────────────────────────
-async def _mic_loop(server: str, bridge, council: bool, stt_backend: str) -> None:
-    # base64 lets us encode raw WAV bytes as ASCII so they can ride inside
-    # a JSON HTTP payload.
+async def _mic_loop(server: str, bridge, strategy_override: str, stt_backend: str) -> None:
     import base64
     import aiohttp
     from omnillm.robotics.audio import record_from_mic
 
-    print(f"Mic mode (stt={stt_backend}). Ctrl-C to quit.\n")
+    print(f"Mic mode (stt={stt_backend}, strategy={strategy_override}). Ctrl-C to quit.\n")
     async with aiohttp.ClientSession() as session:
         while True:
             try:
-                # beginner: ``record_from_mic`` is a BLOCKING function (it
-                # waits for the user to press Enter twice). We wrap it in
-                # ``asyncio.to_thread`` so it runs on a background thread
-                # and doesn't freeze the event loop.
                 audio = await asyncio.to_thread(record_from_mic)
             except KeyboardInterrupt:
                 print()
                 return
             if not audio:
-                # Empty audio = pressed Enter twice without speaking, OR
-                # mic capture failed silently. Skip and try again.
                 print("  [no audio captured]")
                 continue
             print(f"  captured {len(audio)} bytes — sending...")
-            # The server handles transcription internally when "audio" is
-            # provided; we pass stt_backend so it knows whether to use
-            # OpenAI Whisper or local faster-whisper.
             payload = {
                 "audio": base64.b64encode(audio).decode("ascii"),
-                "council": council,
+                "strategy_override": strategy_override,
                 "stt_backend": stt_backend,
             }
             action = await _post_interact(session, server, payload)
@@ -193,10 +176,16 @@ async def _amain(args: argparse.Namespace) -> int:
         )
         print(f"PepperBridge mode={bridge.mode}")
 
+    # ``--council`` is the legacy alias for ``--force-strategy council``.
+    # Explicit ``--force-strategy`` wins if both are set.
+    strategy_override = args.force_strategy
+    if args.council and strategy_override == "auto":
+        strategy_override = "council"
+
     if args.mode == "text":
-        await _text_loop(args.server, bridge, args.council)
+        await _text_loop(args.server, bridge, strategy_override)
     else:
-        await _mic_loop(args.server, bridge, args.council, args.stt)
+        await _mic_loop(args.server, bridge, strategy_override, args.stt)
 
     if bridge is not None:
         await bridge.disconnect()
@@ -211,8 +200,13 @@ def main() -> int:
     parser.add_argument("mode", choices=["text", "mic"], help="input mode")
     parser.add_argument("--server", default=DEFAULT_SERVER,
                         help=f"AI server base URL (default: {DEFAULT_SERVER})")
+    parser.add_argument("--force-strategy", choices=["auto", "direct", "rag", "council"],
+                        default="auto",
+                        help="Override autonomous triage. 'auto' (default) lets "
+                             "the triage classifier decide; 'council' always uses "
+                             "the multi-LLM consensus (~$0.01/prompt — beware on long sessions).")
     parser.add_argument("--council", action="store_true",
-                        help="use multi-LLM council instead of single model")
+                        help="Legacy alias for --force-strategy council.")
     parser.add_argument("--stt", choices=["api", "local"], default="api",
                         help="Whisper backend for mic mode (default: api)")
     parser.add_argument("--robot-ip", default="127.0.0.1",

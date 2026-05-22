@@ -112,6 +112,7 @@ class ConsensusEngine:
         self,
         messages: list[dict[str, str]],
         temperature: float = 0.7,
+        safety_aware: bool = False,
     ) -> ConsensusResult:
         """Run the full consensus pipeline.
 
@@ -122,6 +123,11 @@ class ConsensusEngine:
         Args:
             messages: OpenAI-style message list to send to all models.
             temperature: Sampling temperature for council members.
+            safety_aware: When True, the synthesis judge is given an extra
+                instruction allowing it to refuse / hedge / redirect to a
+                professional when the question is medical, harmful, or
+                otherwise unsafe. Use when the triage classifier flags the
+                prompt as ``dangerous_or_medical``.
 
         Returns:
             :class:`ConsensusResult` with final answer and metadata.
@@ -147,7 +153,7 @@ class ConsensusEngine:
         if self.config.strategy == "weighted":
             return await self._weighted_consensus(valid, responses)
         # Default: synthesis
-        return await self._synthesis(valid, messages, responses)
+        return await self._synthesis(valid, messages, responses, safety_aware=safety_aware)
 
     # ── Consensus strategies ──────────────────────────────────────────────────
 
@@ -272,6 +278,7 @@ class ConsensusEngine:
         valid_responses: list[ModelResponse],
         original_messages: list[dict[str, str]],
         all_responses: list[ModelResponse],
+        safety_aware: bool = False,
     ) -> ConsensusResult:
         """Use a judge LLM to synthesise the best answer from all council responses.
 
@@ -282,6 +289,8 @@ class ConsensusEngine:
             valid_responses: Non-error council responses.
             original_messages: The original prompt sent to the council.
             all_responses: All responses (for result metadata).
+            safety_aware: When True, prepend a safety instruction allowing
+                the judge to refuse or redirect for harmful prompts.
 
         Returns:
             :class:`ConsensusResult` with synthesised answer.
@@ -292,7 +301,26 @@ class ConsensusEngine:
             f"### {r.model_id}\n{r.content}" for r in valid_responses
         )
 
+        # Safety prefix: when triage flagged the prompt as dangerous/medical,
+        # the judge gets explicit permission to refuse or redirect rather
+        # than synthesise advice that could be harmful.
+        safety_prefix = ""
+        if safety_aware:
+            safety_prefix = (
+                "SAFETY OVERRIDE: The question has been flagged as potentially "
+                "medical, dangerous, or harmful. Your final answer MUST do one of:\n"
+                "  (a) decline to give specific advice and redirect to a qualified "
+                "professional (doctor, emergency services, qualified expert),\n"
+                "  (b) provide only general safety information (e.g. 'call emergency "
+                "services'), OR\n"
+                "  (c) if and only if all council responses are clearly safe and "
+                "informational, synthesise a hedged answer that includes an explicit "
+                "disclaimer.\n"
+                "Never produce a confident actionable medical / dangerous instruction.\n\n"
+            )
+
         synthesis_prompt = (
+            f"{safety_prefix}"
             f"You are a synthesis judge reviewing multiple AI responses to a question. "
             f"Your job is to produce the BEST possible answer by combining insights from all responses.\n\n"
             f"**Original Question:**\n{original_prompt}\n\n"

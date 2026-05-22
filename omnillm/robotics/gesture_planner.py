@@ -70,6 +70,7 @@ _TASK_DEFAULT_GESTURES: dict[str, str] = {
     "navigation": "point_forward",
     "social_conversation": "wave",
     "multilingual": "nod",
+    "reasoning": "think",
 }
 
 #: Response-content keyword triggers for gesture override

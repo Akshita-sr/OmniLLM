@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """OmniLLM AI server package.
 
 - :mod:`omnillm.server.app` — Flask HTTP server (Python 3).

@@ -19,12 +19,15 @@ Based on LiteLLM routing concepts:
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import yaml
+
+if TYPE_CHECKING:
+    from omnillm.triage import TriageResult
 
 
 class RoutingStrategy(str, Enum):
@@ -36,6 +39,30 @@ class RoutingStrategy(str, Enum):
     BEST_VALUE = "BEST_VALUE"
     LOCAL_PREFERRED = "LOCAL_PREFERRED"
     TASK_TYPE = "TASK_TYPE"  # HRI: route by task category (T1–T4)
+
+
+@dataclass
+class StrategyDecision:
+    """Output of :meth:`SmartRouter.route_autonomous` — the "LLM-OS kernel"
+    decision for an incoming utterance.
+
+    Attributes:
+        strategy: Which answer pipeline to invoke
+            (``"direct"``, ``"rag"``, or ``"council"``).
+        primary_model: The first model to try for the ``direct`` / ``rag``
+            paths. Ignored for ``council`` (the council reads its own
+            ``council_models`` from ``models.yaml``).
+        fallback_chain: Ordered list of models for
+            :meth:`omnillm.gateway.LLMGateway.query_with_fallback`. Includes
+            ``primary_model`` as the first entry.
+        reason: Human-readable explanation of why this strategy was picked
+            — for logs, metadata, and debugging.
+    """
+
+    strategy: Literal["direct", "rag", "council"]
+    primary_model: str
+    fallback_chain: list[str] = field(default_factory=list)
+    reason: str = ""
 
 
 @dataclass
@@ -113,7 +140,7 @@ class SmartRouter:
         self._config_path = Path(config_path)
         self._models: dict[str, Any] = {}
         self._scores: dict[str, dict[str, dict[str, float]]] = {}
-        # category → model_id → {quality, latency_ms, count}
+        # category -> model_id -> {quality, latency_ms, count}
 
         self._load_config()
         if results_path and Path(results_path).exists():
@@ -177,9 +204,9 @@ class SmartRouter:
         Higher is better.  Normalisation assumes typical ranges:
         quality ∈ [0,1], cost ∈ [0, 0.05], latency ∈ [500, 10000] ms.
         """
-        # Normalise cost: 0 cost → 1.0, 0.05 USD → 0.0
+        # Normalise cost: 0 cost -> 1.0, 0.05 USD -> 0.0
         cost_score = max(0.0, 1.0 - cost / 0.05)
-        # Normalise latency: 500ms → 1.0, 10000ms → 0.0
+        # Normalise latency: 500ms -> 1.0, 10000ms -> 0.0
         latency_score = max(0.0, 1.0 - (latency_ms - 500) / 9500)
         # Weighted combination: quality 50%, cost 30%, latency 20%
         return 0.50 * quality + 0.30 * cost_score + 0.20 * latency_score
@@ -252,7 +279,7 @@ class SmartRouter:
             if strategy == RoutingStrategy.BEST_QUALITY:
                 return q
             if strategy == RoutingStrategy.LOWEST_COST:
-                return -c  # lower cost → higher score
+                return -c  # lower cost -> higher score
             if strategy == RoutingStrategy.LOWEST_LATENCY:
                 return -lat
             if strategy in (
@@ -286,8 +313,8 @@ class SmartRouter:
         """Route based on prompt complexity heuristic.
 
         Simple heuristic:
-        - Short prompts (< 50 words) → fast, cheap model
-        - Long/complex prompts (≥ 50 words) → powerful model
+        - Short prompts (< 50 words) -> fast, cheap model
+        - Long/complex prompts (≥ 50 words) -> powerful model
 
         Args:
             prompt: The user's prompt text.
@@ -341,6 +368,109 @@ class SmartRouter:
             budget_usd=budget_usd,
             max_latency_ms=max_latency_ms,
             strategy=RoutingStrategy.TASK_TYPE,
+        )
+
+    def route_autonomous(
+        self,
+        triage: "TriageResult",
+        rag_available: bool = True,
+    ) -> StrategyDecision:
+        """Pick a strategy + model chain autonomously from a triage result.
+
+        This is the "LLM-OS kernel" entry point — the pipeline calls this
+        instead of the manual ``--council`` flag. Reads
+        ``routing.autonomous_defaults`` from ``models.yaml`` so behaviour can
+        be tuned without code changes.
+
+        Decision rules (first match wins):
+
+        1. Safety not safe -> ``council`` (judge gets a safety-aware prompt).
+        2. Complexity ``complex`` -> ``council``.
+        3. Intent ``coding`` -> ``direct`` with the BEST_QUALITY model.
+        4. Intent ``reasoning`` -> ``direct`` with the reasoning model.
+        5. Intent ``information_request`` / ``navigation`` -> ``rag`` if
+           available, else ``direct``.
+        6. Default (simple social / general chat) -> ``direct`` with the
+           low-cost low-latency model.
+
+        Args:
+            triage: :class:`~omnillm.triage.TriageResult` from the classifier.
+            rag_available: Whether the RAG pipeline is loaded for this server.
+
+        Returns:
+            :class:`StrategyDecision` consumed by the HRI pipeline.
+        """
+        defaults = self._routing_cfg.get("autonomous_defaults", {})
+
+        simple_model = defaults.get("simple_model", "openai-gpt4o-mini")
+        simple_fallback: list[str] = list(defaults.get("simple_fallback", []))
+        coding_model = defaults.get("coding_model", "openai-gpt4o")
+        reasoning_model = defaults.get("reasoning_model", "openai-gpt4o-mini")
+
+        # Build a chain that always starts with the primary model.
+        def _chain(primary: str) -> list[str]:
+            tail = [m for m in simple_fallback if m != primary]
+            return [primary, *tail]
+
+        # Rule 1: safety wins.
+        if triage.safety != "safe":
+            return StrategyDecision(
+                strategy="council",
+                primary_model="",  # council uses its own list
+                fallback_chain=[],
+                reason=f"safety={triage.safety} -> mandatory council with safety-aware judge",
+            )
+
+        # Rule 2: complex -> council.
+        threshold = defaults.get("complexity_council_threshold", "complex")
+        if triage.complexity == threshold:
+            return StrategyDecision(
+                strategy="council",
+                primary_model="",
+                fallback_chain=[],
+                reason=f"complexity={triage.complexity} ≥ threshold ({threshold}) -> council",
+            )
+
+        # Rule 3: coding -> BEST_QUALITY direct.
+        if triage.intent == "coding":
+            return StrategyDecision(
+                strategy="direct",
+                primary_model=coding_model,
+                fallback_chain=_chain(coding_model),
+                reason=f"intent=coding -> BEST_QUALITY model ({coding_model})",
+            )
+
+        # Rule 4: reasoning -> reasoning model direct.
+        if triage.intent == "reasoning":
+            return StrategyDecision(
+                strategy="direct",
+                primary_model=reasoning_model,
+                fallback_chain=_chain(reasoning_model),
+                reason=f"intent=reasoning -> reasoning model ({reasoning_model})",
+            )
+
+        # Rule 5: info / navigation -> RAG if available.
+        if triage.intent in ("information_request", "navigation"):
+            if rag_available:
+                return StrategyDecision(
+                    strategy="rag",
+                    primary_model=simple_model,
+                    fallback_chain=_chain(simple_model),
+                    reason=f"intent={triage.intent} + rag_available -> RAG with {simple_model}",
+                )
+            return StrategyDecision(
+                strategy="direct",
+                primary_model=simple_model,
+                fallback_chain=_chain(simple_model),
+                reason=f"intent={triage.intent}, no RAG -> direct with {simple_model}",
+            )
+
+        # Rule 6: default — simple social / general chat.
+        return StrategyDecision(
+            strategy="direct",
+            primary_model=simple_model,
+            fallback_chain=_chain(simple_model),
+            reason=f"intent={triage.intent}, complexity={triage.complexity} -> low-cost {simple_model}",
         )
 
     def update_scores(self, eval_results: list[dict[str, Any]]) -> None:

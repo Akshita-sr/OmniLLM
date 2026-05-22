@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """OmniLLM — multi-LLM orchestration for the Sgorbissa HRI lab."""
 
 __version__ = "0.2.0"
