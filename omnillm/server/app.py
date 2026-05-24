@@ -176,6 +176,11 @@ def create_app(
         if not utterance:
             return jsonify({"error": "Provide 'text' or 'audio'"}), 400
 
+        # Operating-mode tag set by run.py before the launcher fires. The
+        # client may also override it per-call (useful when a single server
+        # instance handles multiple modes).
+        mode = (data.get("mode") or os.getenv("OMNILLM_MODE") or "").strip()
+
         action = _run_async(process_interaction(
             utterance=utterance,
             gateway=gateway,
@@ -186,6 +191,7 @@ def create_app(
             logger=exp_logger,
             session_id=session_id,
             participant_id=participant_id,
+            mode=mode,
         ))
         return jsonify(action)
 
@@ -200,11 +206,11 @@ def create_app(
             exp_logger.log_interaction(
                 session_id=data["session_id"],
                 participant_id=data["participant_id"],
-                condition="questionnaire",
                 task_type="questionnaire",
                 utterance="",
                 response="",
                 model_id="",
+                mode=(os.getenv("OMNILLM_MODE") or ""),
                 notes=json.dumps(data.get("scores", {})),
             )
         except Exception:
@@ -219,6 +225,7 @@ def create_app(
                 "session_id": r.session_id,
                 "participant_id": r.participant_id,
                 "task_type": r.task_type,
+                "mode": r.mode,
                 "utterance": r.utterance,
                 "response": r.response,
                 "model_id": r.model_id,

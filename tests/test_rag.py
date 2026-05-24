@@ -267,3 +267,17 @@ class TestHallucinationDetection:
     def test_no_hallucination_when_no_chunks(self):
         result = self.rag._detect_hallucination("anything", [])
         assert result is False
+
+
+# ── Knowledge base layout (merged from test_new_components.py) ────────────────
+# Lives in test_rag.py because the KB is what the RAG pipeline indexes.
+
+class TestKnowledgeBase:
+    KB_DIR = Path(__file__).parent.parent / "knowledge_base"
+
+    def test_knowledge_base_directory_exists(self):
+        assert self.KB_DIR.exists(), f"knowledge_base/ dir not found at {self.KB_DIR}"
+
+    def test_kb_has_some_content(self):
+        files = [p for p in self.KB_DIR.iterdir() if p.is_file()]
+        assert len(files) > 0, "KB is empty — run: python -m omnillm.rag.builder --rebuild"

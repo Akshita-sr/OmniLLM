@@ -84,6 +84,7 @@ async def process_interaction(
     logger: "ExperimentLogger | None" = None,
     session_id: str = "",
     participant_id: str = "anon",
+    mode: str = "",
 ) -> dict[str, Any]:
     """Run one user utterance through the autonomous HRI pipeline.
 
@@ -210,11 +211,11 @@ async def process_interaction(
             logger.log_interaction(
                 session_id=session_id,
                 participant_id=participant_id,
-                condition="default",
                 task_type=hri_task,
                 utterance=utterance,
                 response=text,
                 model_id=model_id,
+                mode=mode,
                 latency_ms=latency_ms,
                 rag_enabled=rag_used,
                 language=lang,
