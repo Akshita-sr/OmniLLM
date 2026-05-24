@@ -968,7 +968,7 @@ Expect ~5–8 files in `knowledge_base/` and a freshly-populated `.chroma_store/
 python run.py
 ```
 
-You'll see the 4-mode menu. Pick `[1]` (laptop only) for the first run — no Choregraphe or real robot needed. Type a question at the `>` prompt:
+You'll see the 4-mode menu, then a participant-ID prompt (press Enter to accept the default `P001` for a sanity check, or type `P_TEST` for throwaway data). Session IDs are generated automatically. Pick `[1]` (laptop only) for the first run — no Choregraphe or real robot needed. Type a question at the `>` prompt:
 
 ```
 > What time does the lab open?
@@ -1173,6 +1173,14 @@ These are characterisation hypotheses suited to n=15 — they test the system as
 | T+35 | Thanks, compensate, exit | Voucher / coffee | Walk out |
 
 The researcher is present in the room throughout but stays behind the participant where possible to minimise demand characteristics. Audio of the entire session is recorded on a phone for later qualitative analysis. **Every interaction is also auto-logged by `ExperimentLogger`** into a JSONL file — no manual data entry for technical fields.
+
+**How to launch for a participant.** The launcher needs to know the participant's anonymised label so the JSONL log can be partitioned correctly for the analysis in [Part 6](#part-6--data-evaluation--ml-analysis):
+
+```powershell
+python run.py --participant-id P001
+```
+
+Session IDs auto-generate (UTC timestamp + 6-char UUID). If you omit `--participant-id` the launcher will prompt for one at startup; the default is `P001`, so for participants 2–15 always pass the flag explicitly to avoid logging two participants under the same ID.
 
 ## 5.5 The 8 Tasks
 
@@ -1499,6 +1507,7 @@ Every interaction the live pipeline runs is appended as one JSON object per line
 | `strategy_used` | str | `""` | `direct` / `rag` / `council` |
 | `strategy_reason` | str | `""` | Human-readable explanation from the router |
 | `fallback_attempts` | int | `0` | 0 = primary model worked; N = N failures before success |
+| `agreement_score` | float \| None | `None` | Council synthesis judge's 0.0–1.0 agreement; `None` for non-council strategies. Foundation for the [Part 7](#part-7--future-work-embodied-veracity) Embodied Veracity follow-up. |
 | `timestamp` | str | (auto) | ISO 8601 UTC |
 | `notes` | str | `""` | Free-text |
 
@@ -1525,7 +1534,7 @@ python scripts/evaluate_session.py --log logs/session_P001.jsonl --out results/P
 
 | Artefact | Schema | Cardinality | Used for |
 |---|---|---|---|
-| `<out>.csv` | 29 columns (see [Part 6.3](#63-the-29-column-csv)) | One row per interaction | ML, thesis figures, statistical tests |
+| `<out>.csv` | 30 columns (see [Part 6.3](#63-the-30-column-csv)) | One row per interaction | ML, thesis figures, statistical tests |
 | `<out>.jsonl` | Same as input + `judge_score`, `judge_reasoning`, `judge_latency_ms`, `elo_rating_before`, `elo_rating_after` | One row per interaction | Resume-safe intermediate |
 | `<out>.elo.json` | `{leaderboard: [{model_id, rating, matches}], k_factor, default_rating}` | One leaderboard | Model ranking |
 | `<out>.cost_summary.json` | `{total_cost_usd, total_calls, by_model: {...}, by_session: {...}}` | One summary | Budget reporting |
@@ -1538,9 +1547,9 @@ python scripts/evaluate_session.py --log logs/session_P001.jsonl --out results/P
 4. **Run an ELO pass**: group rows by `task_type`; for consecutive different-model pairs, treat higher `judge_score` as the winner (ties at |Δ| < 0.05); update ratings.
 5. **Aggregate costs** and **write all four files**.
 
-## 6.3 The 29-Column CSV
+## 6.3 The 30-Column CSV
 
-The canonical column order is defined in [scripts/evaluate_session.py:102-140](scripts/evaluate_session.py#L102-L140). Every row has these exact columns in this exact order:
+The canonical column order is defined in [scripts/evaluate_session.py:102-142](scripts/evaluate_session.py#L102-L142). Every row has these exact columns in this exact order:
 
 | # | Column | Type | Source | Meaning |
 |---|---|---|---|---|
@@ -1573,6 +1582,7 @@ The canonical column order is defined in [scripts/evaluate_session.py:102-140](s
 | 27 | `elo_rating_after` | float | **eval script** | ELO after this row's matches |
 | 28 | `gesture` | str | log (renamed from `gesture_used`) | Named gesture |
 | 29 | `success` | str | log (renamed from `task_success`) | Empty if None, else stringified bool |
+| 30 | `agreement_score` | float \| str | log | Council synthesis-judge agreement 0.0–1.0; empty string for non-council rows |
 
 This schema is the contract for downstream ML. Don't reorder columns. If you add a new column, append it at the end.
 
@@ -1839,15 +1849,15 @@ The judge LLM is deterministic at `temperature=0.0`, but model drift across days
 
 ## 7.1 The 2026-05-21 Pivot
 
-While building OmniLLM I noticed something the literature has not addressed: the consensus engine already produces a per-utterance disagreement signal (the synthesis judge's `agreement_score` ∈ [0, 1]) that is currently *thrown away* at the HRI layer. The robot speaks the synthesised answer with the same confidence regardless of whether the council agreed unanimously or split 1-1-1.
+While building OmniLLM I noticed something the literature has not addressed: the consensus engine produces a per-utterance disagreement signal (the synthesis judge's `agreement_score` ∈ [0, 1]) that until recently was *thrown away* at the HRI layer. As of the 2026-05-24 audit fixes, the score is now logged to JSONL (field `agreement_score`) and CSV (column 30) — but it still does not change the robot's behaviour. Pepper speaks the synthesised answer with the same confidence regardless of whether the council agreed unanimously or split 1-1-1.
 
 This is the wrong default. The research question for the next study writes itself:
 
 **Can a social robot calibrate human trust better by *displaying its own LLM-level uncertainty* through the body language it already has — LED hue, gesture amplitude, verbal hedging?**
 
-I'm calling this **Embodied Veracity**. It is a clean follow-up to this thesis because the signal already exists; only the display layer is missing.
+I'm calling this **Embodied Veracity**. It is a clean follow-up to this thesis because the signal already exists in the log; only the display layer is missing.
 
-The brainstorm note for this lives in my private memory (2026-05-21). Nothing has been built yet — this is the roadmap, not a feature.
+The brainstorm note for this lives in my private memory (2026-05-21). The data-plumbing half (logging the score) is done as of 2026-05-24. The display half — wiring it into gesture/LED/verbal hedging — is still the roadmap, not a feature.
 
 ## 7.2 The Proposal
 
@@ -1880,14 +1890,14 @@ This is the camp nobody has filled (see [Part 1.4](#14-what-is-currently-lacking
 
 ## 7.3 Open Engineering Tasks
 
-To wire this in, four small changes:
+The data-plumbing half is done. Three engineering tasks remain to wire `agreement_score` into Pepper's behaviour:
 
-1. **Wire `agreement_score` into `RobotAction.metadata`**. Already produced by `ConsensusEngine.query_council`; just need to forward it through [pipeline.py](omnillm/hri/pipeline.py).
-2. **Extend [gesture_planner.py](omnillm/robotics/gesture_planner.py)** with hedged-variant gestures (open-palm shrug, half-amplitude point) and add an `agreement_bin` parameter.
-3. **Tune the bin thresholds** with pilot data — the 0.85 / 0.60 / 0.30 boundaries above are a starting guess; the actual distribution of `agreement_score` in real sessions will inform calibration.
+1. ~~**Wire `agreement_score` into `RobotAction.metadata`**~~ — ✅ **Done 2026-05-24** (audit fix). Now produced by `ConsensusEngine.query_council`, returned by `_answer_council` as the 3rd tuple element, stamped into [pipeline.py](omnillm/hri/pipeline.py) metadata, logged to JSONL, and surfaced as CSV column 30.
+2. **Extend [gesture_planner.py](omnillm/robotics/gesture_planner.py)** with hedged-variant gestures (open-palm shrug, half-amplitude point) and add an `agreement_bin` parameter to `GesturePlanner.plan()`. The bin → gesture mapping lives in the [Part 7.2](#72-the-proposal) table.
+3. **Tune the bin thresholds** with pilot data — the 0.85 / 0.60 / 0.30 boundaries above are a starting guess. Now that the score is in the CSV, a one-line `df["agreement_score"].describe()` on a 15-participant pilot tells you the actual distribution and where to put the bin boundaries.
 4. **Replicate cross-linguistically** — uncertainty conventions may differ across cultures (e.g., Japanese hedging is more frequent than English). Recruit a multilingual sample for the follow-up.
 
-Estimated time to implement: 1 week of code + 2 weeks to recruit and run the 30-person follow-up.
+Estimated time to implement the remaining display-layer work: ~3 days of code + 2 weeks to recruit and run the 30-person follow-up.
 
 ---
 

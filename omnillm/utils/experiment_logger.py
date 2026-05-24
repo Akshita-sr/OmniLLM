@@ -100,6 +100,14 @@ class InteractionRecord:
     strategy_reason: str = ""
     fallback_attempts: int = 0
 
+    # ── Council diagnostic (Part 7 Embodied Veracity foundation) ─────────────
+    # WHAT:  Synthesis judge's reported agreement 0.0–1.0 when the council ran.
+    #        None for non-council strategies (direct / rag / multilingual).
+    # WHY:   Logged so post-session analysis can correlate model agreement
+    #        with judge_score, and so the Embodied Veracity follow-up has the
+    #        signal it needs without a second study.
+    agreement_score: float | None = None
+
     # ── Bookkeeping ───────────────────────────────────────────────────────────
     timestamp: str = field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
@@ -162,6 +170,7 @@ class ExperimentLogger:
         strategy_used: str = "",
         strategy_reason: str = "",
         fallback_attempts: int = 0,
+        agreement_score: float | None = None,
         notes: str = "",
     ) -> InteractionRecord:
         """Append one InteractionRecord. Returns the record so callers can inspect it.
@@ -196,6 +205,7 @@ class ExperimentLogger:
             strategy_used=strategy_used,
             strategy_reason=strategy_reason,
             fallback_attempts=fallback_attempts,
+            agreement_score=agreement_score,
             notes=notes,
         )
         self._records.append(record)

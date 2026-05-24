@@ -8,6 +8,7 @@ import pytest
 
 from omnillm.consensus import ConsensusConfig, ConsensusEngine, ConsensusResult
 from omnillm.gateway import LLMGateway, ModelResponse
+from omnillm.hri.pipeline import _answer_council
 
 
 def _make_gateway_with_responses(responses: dict[str, str]) -> MagicMock:
@@ -264,3 +265,48 @@ def json_synthesis_response() -> str:
         "reasoning": "Both models agree the ball costs 5 cents.",
         "dissenting_models": [],
     })
+
+
+# ── Regression: agreement_score must be returned by _answer_council ──────────
+# Pre-2026-05-24 _answer_council returned (text, model_id) — the synthesis
+# judge's agreement_score was dropped at the function boundary. Now it returns
+# (text, model_id, agreement_score) so the pipeline can stamp it on metadata
+# and the JSONL log.
+
+class TestAnswerCouncilReturnsAgreementScore:
+    @pytest.mark.asyncio
+    async def test_returns_three_tuple_with_float_agreement(self):
+        """_answer_council must return (text, model_id, agreement_score)."""
+        # The helper produces a synthesis JSON whose agreement_score is 0.95.
+        judge_content = json_synthesis_response()
+
+        async def mock_query(model_id, messages, **kwargs):
+            # The judge model is openai-gpt4o per ConsensusConfig defaults.
+            if model_id == "openai-gpt4o":
+                return ModelResponse(model_id=model_id, content=judge_content)
+            return ModelResponse(model_id=model_id, content=f"Answer from {model_id}")
+
+        async def mock_query_multiple(model_ids, messages, **kwargs):
+            return [
+                ModelResponse(model_id=mid, content=f"Answer from {mid}")
+                for mid in model_ids
+            ]
+
+        gw = MagicMock(spec=LLMGateway)
+        gw.query = AsyncMock(side_effect=mock_query)
+        gw.query_multiple = AsyncMock(side_effect=mock_query_multiple)
+        gw.list_models = MagicMock(
+            return_value=["openai-gpt4o-mini", "claude-haiku", "gemini-2.5-flash"]
+        )
+
+        result = await _answer_council(gw, "Where is the lab?", rag=None, safety_aware=False)
+
+        # The critical regression check: 3-tuple, third element is the score.
+        assert len(result) == 3, "expected (text, model_id, agreement_score)"
+        text, model_id, agreement_score = result
+        assert isinstance(text, str) and text
+        assert model_id.startswith("council:")
+        assert isinstance(agreement_score, float)
+        assert 0.0 <= agreement_score <= 1.0
+        # The mocked judge reports 0.95 — confirm it survived the round-trip.
+        assert agreement_score == pytest.approx(0.95)

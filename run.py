@@ -68,6 +68,8 @@ import argparse   # CLI flag parsing
 import asyncio    # `asyncio.run(...)` drives the async pipeline below
 import os         # environment-variable plumbing for the mode → server
 import sys        # exit codes
+import uuid       # auto-generate session IDs when the user doesn't supply one
+from datetime import datetime, timezone  # readable session ID prefix (UTC)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -152,6 +154,30 @@ def _prompt_input_source(mode: str) -> str:
         if ans in ("m", "mic"):
             return "mic"
         print("  please type 'm' or 't'")
+
+
+def _prompt_participant_id() -> str:
+    """Ask for a participant label (e.g. P001). Defaults to 'P001' if blank.
+
+    WHY:  Without this the server logs every row under participant_id='anon',
+          and the 15-person within-subjects protocol (OMNILLM_MASTER_BOOK Part 5)
+          cannot separate participants in post-session analysis.
+    """
+    try:
+        pid = input("Participant ID [P001]: ").strip()
+    except (EOFError, KeyboardInterrupt):
+        return "P001"
+    return pid or "P001"
+
+
+def _auto_session_id() -> str:
+    """Generate a fresh session ID. UTC timestamp + 6 random hex chars.
+
+    Format: YYYYMMDDTHHMMSS_xxxxxx — sorts chronologically AND is collision-
+    safe across simultaneous launches. Never blocks the user with a prompt.
+    """
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+    return f"{stamp}_{uuid.uuid4().hex[:6]}"
 
 
 def _prompt_robot_ip(mode: str) -> str:
@@ -301,11 +327,26 @@ async def _execute(bridge, action: dict[str, Any]) -> None:
 #        only differ in HOW they get the input (keyboard vs microphone).
 # WHY:   Splitting them keeps each loop straight-line readable.
 
-async def _text_loop(server: str, bridge, strategy_override: str) -> None:
-    """Read keyboard input one line at a time. Type 'quit' or Ctrl-C to exit."""
+async def _text_loop(
+    server: str,
+    bridge,
+    strategy_override: str,
+    session_id: str,
+    participant_id: str,
+) -> None:
+    """Read keyboard input one line at a time. Type 'quit' or Ctrl-C to exit.
+
+    Every /interact POST carries session_id + participant_id so the server's
+    ExperimentLogger can attribute the row to the correct participant. Without
+    these fields the server defaults participant_id to 'anon' and the
+    15-person protocol can't separate participants post-hoc.
+    """
     # Lazy import so `python run.py --help` works without aiohttp installed.
     import aiohttp
-    print(f"Text mode (strategy={strategy_override}). Press Ctrl-C to quit.\n")
+    print(
+        f"Text mode (strategy={strategy_override}, participant={participant_id}, "
+        f"session={session_id}). Press Ctrl-C to quit.\n"
+    )
     async with aiohttp.ClientSession() as session:
         while True:
             try:
@@ -317,7 +358,12 @@ async def _text_loop(server: str, bridge, strategy_override: str) -> None:
                 continue
             if utterance.lower() in {"quit", "exit", "q"}:
                 return
-            payload = {"text": utterance, "strategy_override": strategy_override}
+            payload = {
+                "text": utterance,
+                "strategy_override": strategy_override,
+                "session_id": session_id,
+                "participant_id": participant_id,
+            }
             action = await _post_interact(session, server, payload)
             if "error" in action:
                 print(f"  [error] {action['error']}")
@@ -325,13 +371,27 @@ async def _text_loop(server: str, bridge, strategy_override: str) -> None:
             await _execute(bridge, action)
 
 
-async def _mic_loop(server: str, bridge, strategy_override: str, stt_backend: str) -> None:
-    """Record from the laptop mic, send the audio bytes to the server."""
+async def _mic_loop(
+    server: str,
+    bridge,
+    strategy_override: str,
+    stt_backend: str,
+    session_id: str,
+    participant_id: str,
+) -> None:
+    """Record from the laptop mic, send the audio bytes to the server.
+
+    See _text_loop for why session_id + participant_id are required on every
+    payload (server-side default is 'anon' which breaks per-participant logs).
+    """
     import base64
     import aiohttp
     from omnillm.robotics.audio import record_from_mic
 
-    print(f"Mic mode (stt={stt_backend}, strategy={strategy_override}). Ctrl-C to quit.\n")
+    print(
+        f"Mic mode (stt={stt_backend}, strategy={strategy_override}, "
+        f"participant={participant_id}, session={session_id}). Ctrl-C to quit.\n"
+    )
     async with aiohttp.ClientSession() as session:
         while True:
             try:
@@ -351,6 +411,8 @@ async def _mic_loop(server: str, bridge, strategy_override: str, stt_backend: st
                 "audio": base64.b64encode(audio).decode("ascii"),
                 "strategy_override": strategy_override,
                 "stt_backend": stt_backend,
+                "session_id": session_id,
+                "participant_id": participant_id,
             }
             action = await _post_interact(session, server, payload)
             if "error" in action:
@@ -389,9 +451,15 @@ async def _amain(args: argparse.Namespace) -> int:
 
     # ── Run the chosen input loop ──────────────────────────────────────────────
     if args.input_source == "text":
-        await _text_loop(args.server, bridge, strategy_override)
+        await _text_loop(
+            args.server, bridge, strategy_override,
+            args.session_id, args.participant_id,
+        )
     else:
-        await _mic_loop(args.server, bridge, strategy_override, args.stt)
+        await _mic_loop(
+            args.server, bridge, strategy_override, args.stt,
+            args.session_id, args.participant_id,
+        )
 
     # ── Clean up ───────────────────────────────────────────────────────────────
     if bridge is not None:
@@ -452,6 +520,15 @@ def _build_parser() -> argparse.ArgumentParser:
     # regardless of what --mode says, for compatibility with old scripts.
     parser.add_argument("--no-pepper", action="store_true",
                         help="Force laptop-only mode (no Pepper bridge).")
+    # ── Experiment-tracking IDs (required for the 15-person protocol) ─────────
+    # WHY:  Without these, the server logs every row under participant_id='anon'.
+    #       Post-session analysis (scripts/evaluate_session.py + analysis.ipynb)
+    #       cannot separate participants. Interactive prompt fills the gap if
+    #       the launcher is run without --participant-id.
+    parser.add_argument("--participant-id", default=None,
+                        help="Participant label, e.g. P001. Prompted if omitted.")
+    parser.add_argument("--session-id", default=None,
+                        help="Session ID. Auto-generated (UTC timestamp + uuid) if omitted.")
     return parser
 
 
@@ -474,6 +551,14 @@ def main() -> int:
     # ── Resolve the real-Pepper IP (only prompts in modes 3/4 if not given) ──
     if args.robot_ip is None:
         args.robot_ip = _prompt_robot_ip(args.mode)
+
+    # ── Resolve the participant + session IDs ────────────────────────────────
+    # CRITICAL: without these the server stamps participant_id='anon' on every
+    # row, which breaks the 15-person within-subjects protocol.
+    if args.participant_id is None:
+        args.participant_id = _prompt_participant_id()
+    if args.session_id is None:
+        args.session_id = _auto_session_id()
 
     # ── Stamp mode → concrete config (env vars, no_pepper, audio source) ─────
     _apply_mode_to_args(args)

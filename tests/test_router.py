@@ -7,8 +7,21 @@ from pathlib import Path
 import pytest
 
 from omnillm.router import RouteDecision, RoutingStrategy, SmartRouter
+from omnillm.triage import TriageResult
 
 CONFIG_PATH = Path(__file__).parent.parent / "config" / "models.yaml"
+
+
+def _triage(complexity: str, intent: str = "general_chat", safety: str = "safe") -> TriageResult:
+    """Helper: build a minimal TriageResult for autonomous-routing tests."""
+    return TriageResult(
+        intent=intent,           # type: ignore[arg-type]
+        complexity=complexity,   # type: ignore[arg-type]
+        safety=safety,           # type: ignore[arg-type]
+        confidence=0.9,
+        method="rule_based",
+        reasoning="test fixture",
+    )
 
 
 class TestRouteDecision:
@@ -203,3 +216,45 @@ class TestSmartRouter:
         decision = router.route_for_hri_task("navigation", budget_usd=0.0)
         # Budget=0 forces local (free) model
         assert router._get_cost_per_query(decision.model_id) == pytest.approx(0.0)
+
+
+class TestRouteAutonomousComplexityThreshold:
+    """Regression tests for the `complexity_council_threshold` ≥ semantics.
+
+    Pre-2026-05-24 the router used `triage.complexity == threshold` (exact
+    match) which silently broke when threshold was tuned to "medium". This
+    suite locks in the ordinal comparison.
+    """
+
+    def _router_with_threshold(self, threshold: str) -> SmartRouter:
+        router = SmartRouter(config_path=CONFIG_PATH)
+        # Inject the threshold without rewriting the YAML on disk.
+        router._routing_cfg.setdefault("autonomous_defaults", {})
+        router._routing_cfg["autonomous_defaults"]["complexity_council_threshold"] = threshold
+        return router
+
+    def test_threshold_complex_triggers_only_on_complex(self):
+        router = self._router_with_threshold("complex")
+        assert router.route_autonomous(_triage("simple")).strategy != "council"
+        assert router.route_autonomous(_triage("medium")).strategy != "council"
+        assert router.route_autonomous(_triage("complex")).strategy == "council"
+
+    def test_threshold_medium_triggers_on_medium_and_complex(self):
+        """THE BUG FIX: threshold='medium' must escalate BOTH medium AND complex."""
+        router = self._router_with_threshold("medium")
+        assert router.route_autonomous(_triage("simple")).strategy != "council"
+        assert router.route_autonomous(_triage("medium")).strategy == "council"
+        assert router.route_autonomous(_triage("complex")).strategy == "council"
+
+    def test_threshold_simple_triggers_on_everything(self):
+        router = self._router_with_threshold("simple")
+        for complexity in ("simple", "medium", "complex"):
+            assert router.route_autonomous(_triage(complexity)).strategy == "council"
+
+    def test_safety_override_always_wins_regardless_of_threshold(self):
+        """Safety overrides Rule 2 — dangerous prompts go to council even at threshold=complex."""
+        router = self._router_with_threshold("complex")
+        triage = _triage("simple", safety="dangerous_or_medical")
+        decision = router.route_autonomous(triage)
+        assert decision.strategy == "council"
+        assert "safety" in decision.reason.lower()

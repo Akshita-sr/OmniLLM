@@ -150,12 +150,15 @@ async def process_interaction(
         )
 
     # STEP 3 — ANSWER (exactly one branch runs).
+    # `agreement_score` is only meaningful for the council branch; for direct/
+    # rag/multilingual it stays None and is logged as null in the JSONL.
+    agreement_score: float | None = None
     if lang != "en" and strategy_override == "auto":
         # Multilingual branch (kept for parity with the previous pipeline).
         text, model_id = await _answer_multilingual(gateway, utterance, lang_code=lang)
         fallback_count = 0
     elif decision.strategy == "council":
-        text, model_id = await _answer_council(
+        text, model_id, agreement_score = await _answer_council(
             gateway, utterance, rag,
             safety_aware=(triage.safety != "safe"),
         )
@@ -202,6 +205,8 @@ async def process_interaction(
             "strategy": decision.strategy,
             "strategy_reason": decision.reason,
             "fallback_attempts": fallback_count,
+            # Council diagnostic — None for non-council strategies.
+            "agreement_score": agreement_score,
         },
     }
 
@@ -227,6 +232,7 @@ async def process_interaction(
                 strategy_used=decision.strategy,
                 strategy_reason=decision.reason,
                 fallback_attempts=fallback_count,
+                agreement_score=agreement_score,
             )
         except Exception:
             pass  # logging is best-effort, never breaks the response
@@ -357,7 +363,7 @@ async def _answer_council(
     utterance: str,
     rag: "RAGPipeline | None",
     safety_aware: bool = False,
-) -> tuple[str, str]:
+) -> tuple[str, str, float]:
     # COUNCIL: three LLMs answer concurrently, a judge LLM synthesises the
     # best combined response. See omnillm/consensus.py for the engine and
     # OMNILLM_MASTER_BOOK.md §3.4.4 for the synthesis prompt verbatim.
@@ -393,4 +399,7 @@ async def _answer_council(
     # The model_id string makes it obvious in the log that this was a
     # council answer (e.g. "council:openai-gpt4o-mini+claude-haiku+gemini-2.5-flash").
     prefix = "council-safe:" if safety_aware else "council:"
-    return council_resp.final_answer, prefix + "+".join(available)
+    # Returning agreement_score as the 3rd tuple element threads the council's
+    # diagnostic signal up to the metadata + JSONL log — the Part 7 Embodied
+    # Veracity follow-up consumes it. None branches default agreement_score=None.
+    return council_resp.final_answer, prefix + "+".join(available), council_resp.agreement_score

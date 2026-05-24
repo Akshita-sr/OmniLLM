@@ -137,6 +137,8 @@ CSV_COLUMNS: list[str] = [
     # ── Presentation + outcome ────────────────────────────────────────────────
     "gesture",            # The named gesture Pepper performed, or empty.
     "success",            # Task-success boolean from the logger, or empty.
+    # ── Council diagnostic (Part 7 Embodied Veracity foundation) ─────────────
+    "agreement_score",    # Synthesis judge's 0.0–1.0 agreement; empty for non-council rows.
 ]
 
 
@@ -536,6 +538,10 @@ def _row_to_csv_dict(row: dict[str, Any]) -> dict[str, Any]:
         "gesture":          row.get("gesture_used", "") or "",
         # task_success can be None — write as "" rather than the string "None".
         "success":          "" if row.get("task_success") is None else row.get("task_success"),
+        # ── Council diagnostic ──
+        # agreement_score is None for direct/rag/multilingual rows; write as ""
+        # so the CSV column stays numerically typed for council rows only.
+        "agreement_score":  "" if row.get("agreement_score") is None else row.get("agreement_score"),
     }
 
 

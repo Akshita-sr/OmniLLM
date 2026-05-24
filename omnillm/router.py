@@ -30,6 +30,13 @@ if TYPE_CHECKING:
     from omnillm.triage import TriageResult
 
 
+# Ordinal ranking of triage complexity labels. Used by the autonomous router
+# to honour the `complexity_council_threshold` YAML key with TRUE ≥ semantics
+# (so threshold="medium" correctly escalates BOTH medium AND complex prompts
+# to council, not just exact matches). Was a silent bug with `==` comparison.
+_COMPLEXITY_ORDER: dict[str, int] = {"simple": 0, "medium": 1, "complex": 2}
+
+
 class RoutingStrategy(str, Enum):
     """Available routing strategies for the :class:`SmartRouter`."""
 
@@ -422,8 +429,12 @@ class SmartRouter:
             )
 
         # Rule 2: complex -> council.
+        # TRUE ≥ semantics via ordinal compare — threshold="medium" must
+        # trigger on BOTH medium AND complex; threshold="complex" only on complex.
         threshold = defaults.get("complexity_council_threshold", "complex")
-        if triage.complexity == threshold:
+        triage_rank = _COMPLEXITY_ORDER.get(triage.complexity, 0)
+        threshold_rank = _COMPLEXITY_ORDER.get(threshold, 2)
+        if triage_rank >= threshold_rank:
             return StrategyDecision(
                 strategy="council",
                 primary_model="",

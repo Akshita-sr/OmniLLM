@@ -193,6 +193,34 @@ class TestExperimentLogger:
         assert len(data) == 1
         assert data[0]["session_id"] == "s1"
 
+    def test_agreement_score_defaults_to_none(self):
+        """Non-council strategies leave agreement_score as None."""
+        record = self.logger.log_interaction(
+            "s1", "P001", "info_retrieval", "q", "a", "openai-gpt4o-mini",
+        )
+        assert record.agreement_score is None
+
+    def test_agreement_score_round_trips_through_save_load(self, tmp_path: Path):
+        """Regression: council's agreement_score must survive save → load.
+
+        Pre-2026-05-24 the field didn't exist in InteractionRecord, so the
+        consensus diagnostic was lost. Locks in the Part 7 Embodied Veracity
+        prerequisite.
+        """
+        self.logger.log_interaction(
+            "s1", "P001", "info_retrieval", "Where is the lab?", "On the 3rd floor.",
+            "council:openai-gpt4o-mini+claude-haiku+gemini-2.5-flash",
+            agreement_score=0.85,
+        )
+        path = tmp_path / "records.json"
+        self.logger.save(path)
+
+        new_logger = ExperimentLogger()
+        new_logger.load(path)
+        records = new_logger.get_records()
+        assert len(records) == 1
+        assert records[0].agreement_score == pytest.approx(0.85)
+
     def test_save_csv(self, tmp_path: Path):
         self.logger.log_interaction("s1", "P001", "navigation", "q", "a", "m")
         path = tmp_path / "records.csv"
