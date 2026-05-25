@@ -153,6 +153,7 @@ async def process_interaction(
     # `agreement_score` is only meaningful for the council branch; for direct/
     # rag/multilingual it stays None and is logged as null in the JSONL.
     agreement_score: float | None = None
+    rag_hit = False  # True iff RAG returned a non-empty answer this turn.
     if lang != "en" and strategy_override == "auto":
         # Multilingual branch (kept for parity with the previous pipeline).
         text, model_id = await _answer_multilingual(gateway, utterance, lang_code=lang)
@@ -164,8 +165,16 @@ async def process_interaction(
         )
         fallback_count = 0
     elif decision.strategy == "rag" and rag is not None:
-        text, model_id = await _answer_with_rag(rag, utterance, decision.primary_model)
-        fallback_count = 0
+        text, model_id, rag_hit = await _answer_with_rag(rag, utterance, decision.primary_model)
+        if not rag_hit:
+            # KB had nothing relevant — fall through to direct LLM so general-
+            # knowledge queries don't dead-end on the canned refusal.
+            text, model_id, fallback_count = await _answer_direct_with_fallback(
+                gateway, utterance,
+                decision.fallback_chain or [decision.primary_model or default_model],
+            )
+        else:
+            fallback_count = 0
     else:
         text, model_id, fallback_count = await _answer_direct_with_fallback(
             gateway, utterance, decision.fallback_chain or [decision.primary_model or default_model],
@@ -182,7 +191,7 @@ async def process_interaction(
     latency_ms = (time.monotonic() - t0) * 1000
 
     # STEP 4 — ASSEMBLE THE RobotAction DICT.
-    rag_used = decision.strategy == "rag" and rag is not None
+    rag_used = rag_hit
     action: dict[str, Any] = {
         "speech": text,
         "gesture": gesture,
@@ -311,15 +320,18 @@ async def _answer_direct_with_fallback(
 
 async def _answer_with_rag(
     rag: "RAGPipeline", utterance: str, model_id: str
-) -> tuple[str, str]:
+) -> tuple[str, str, bool]:
     # RAG: retrieve KB chunks, then ask the LLM with those chunks as context.
     # The "answer ONLY from context" instruction lives inside ``rag.query`` —
     # see rag/pipeline.py for the prompt.
+    # Returns (text, model_id, rag_hit). rag_hit=False means the KB had no
+    # relevant chunks — the caller is expected to fall back to a direct LLM
+    # answer rather than refuse, so general-knowledge queries still work
+    # when the KB is domain-scoped (DIBRIS).
     rag_resp = await rag.query(utterance, model_id=model_id)
-    # Empty answer = retrieval found nothing useful. Polite refusal beats silence.
     if not rag_resp.answer:
-        return "I don't have information about that yet.", rag_resp.model_id or model_id
-    return rag_resp.answer, rag_resp.model_id or model_id
+        return "", rag_resp.model_id or model_id, False
+    return rag_resp.answer, rag_resp.model_id or model_id, True
 
 
 async def _answer_multilingual(
