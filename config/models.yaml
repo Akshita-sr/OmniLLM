@@ -107,13 +107,13 @@ models:
   groq-llama3-70b:
     id: groq-llama3-70b
     provider: openai_compatible
-    model: llama-3.1-70b-versatile
+    model: llama-3.3-70b-versatile
     api_key_env: GROQ_API_KEY
     api_base: https://api.groq.com/openai/v1
     cost_per_1m_input: 0.00
     cost_per_1m_output: 0.00
     type: cloud
-    description: "Groq Llama 3.1 70B — free tier, ~500 tok/s, ideal for Pepper low-latency replies"
+    description: "Groq Llama 3.3 70B — free tier, ~275 tok/s, ideal for Pepper low-latency replies"
     hri_strengths: ["social_conversation", "navigation", "info_retrieval"]
 
   qwen-2.5-72b:
@@ -225,8 +225,8 @@ routing:
   autonomous_defaults:
     simple_model: groq-llama3-70b               # System-1: free + fast (~500 tok/s)
     simple_fallback:                            # tried in order when simple_model errors
-      - llama3-8b-local                         # zero-cost offline backstop
-      - openai-gpt4o-mini                       # paid reliable last resort
+      - openai-gpt4o-mini                       # paid reliable — quality-safe when Groq fails
+      - llama3-8b-local                         # zero-cost offline backstop (last resort)
     coding_model: openai-gpt4o                  # BEST_QUALITY for code generation
     reasoning_model: deepseek-r1-cloud          # multi-step / causal reasoning
     complexity_council_threshold: complex       # trigger council when triage says "complex"

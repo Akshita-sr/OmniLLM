@@ -324,12 +324,24 @@ async def _answer_with_rag(
     # RAG: retrieve KB chunks, then ask the LLM with those chunks as context.
     # The "answer ONLY from context" instruction lives inside ``rag.query`` —
     # see rag/pipeline.py for the prompt.
-    # Returns (text, model_id, rag_hit). rag_hit=False means the KB had no
-    # relevant chunks — the caller is expected to fall back to a direct LLM
-    # answer rather than refuse, so general-knowledge queries still work
-    # when the KB is domain-scoped (DIBRIS).
+    # Returns (text, model_id, rag_hit). rag_hit=False means retrieval found
+    # nothing relevant — the caller falls back to a direct LLM answer.
+    #
+    # Why a similarity threshold and not just an empty-answer check?
+    # ChromaDB returns top-k chunks regardless of how poor the match is, so
+    # even off-topic queries get 4 chunks back. The LLM, instructed to
+    # "answer ONLY from context", then produces a polite refusal string off
+    # those irrelevant chunks — non-empty, so an empty-answer check misses it.
+    # Reading the retrieval quality directly is the reliable signal.
     rag_resp = await rag.query(utterance, model_id=model_id)
-    if not rag_resp.answer:
+    # Cosine similarity on sentence-transformer embeddings: ~0.7+ is a clear
+    # topical hit, ~0.4-0.7 is related, <0.3 is off-topic. 0.30 catches
+    # obvious misses without rejecting loosely-worded DIBRIS queries.
+    MIN_SIMILARITY = 0.30
+    top_score = max(
+        (c.similarity_score for c in rag_resp.retrieved_chunks), default=0.0
+    )
+    if not rag_resp.answer or top_score < MIN_SIMILARITY:
         return "", rag_resp.model_id or model_id, False
     return rag_resp.answer, rag_resp.model_id or model_id, True
 
